@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>투자온도계</title>
+<style>
+  :root {
+    --page: #f6f6f3; --surface: #fcfcfb; --line: #e4e3de; --grid: #ecebe6;
+    --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #8a8983;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 2px 8px rgba(0,0,0,.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --page: #0d0d0d; --surface: #1a1a19; --line: #2c2c2a; --grid: #262624;
+      --ink: #f0efec; --ink-2: #c3c2b7; --ink-3: #8d8c85; --shadow: none;
+    }
+  }
+  :root[data-theme="dark"] {
+    --page: #0d0d0d; --surface: #1a1a19; --line: #2c2c2a; --grid: #262624;
+    --ink: #f0efec; --ink-2: #c3c2b7; --ink-3: #8d8c85; --shadow: none;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--ink);
+    font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+    font-variant-numeric: tabular-nums; line-height: 1.45;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 28px 16px 56px; }
+  header { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+  .sub { color: var(--ink-2); font-size: 13px; margin-top: 4px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 20px; }
+  h2 { font-size: 15px; margin: 0 0 14px; }
+  .muted { color: var(--ink-3); font-size: 12px; }
+
+  /* hero */
+  .hero { display: grid; grid-template-columns: 260px 1fr; gap: 16px; margin-bottom: 16px; }
+  .gauge { display: flex; align-items: center; gap: 18px; }
+  .gauge svg { flex-shrink: 0; }
+  .temp-num { font-size: 56px; font-weight: 700; line-height: 1; letter-spacing: -0.03em; }
+  .temp-num small { font-size: 22px; font-weight: 600; color: var(--ink-2); }
+  .status { display: inline-block; margin-top: 10px; padding: 4px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .tile { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .tile .k { font-size: 12px; color: var(--ink-2); }
+  .tile .v { margin-top: 6px; font-size: 20px; font-weight: 700; }
+  .chip { display: inline-block; padding: 2px 10px; border-radius: 8px; }
+  .star { color: #e0a400; margin-right: 4px; font-size: .9em; }
+
+  /* scale legend */
+  .scale { margin-top: 14px; }
+  .scale-bar { height: 10px; border-radius: 5px; }
+  .scale-ticks { position: relative; height: 16px; font-size: 11px; color: var(--ink-3); margin-top: 4px; }
+  .scale-ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+  .scale-ticks span:first-child { transform: none; } .scale-ticks span:last-child { transform: translateX(-100%); }
+
+  /* chart */
+  .chart-card { margin-bottom: 16px; position: relative; }
+  svg text { fill: var(--ink-3); font-size: 11px; font-family: inherit; }
+  .tip {
+    position: absolute; pointer-events: none; background: var(--surface); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.12); opacity: 0; transition: opacity .1s; white-space: nowrap; z-index: 5;
+  }
+  .tip b { font-size: 14px; }
+
+  /* table */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: separate; border-spacing: 0 2px; font-size: 13px; min-width: 920px; }
+  th { text-align: right; font-weight: 600; color: var(--ink-2); font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+  th:nth-child(3), td:nth-child(3) { text-align: center; }
+  td { text-align: right; padding: 3px 4px; }
+  td .chip { min-width: 54px; text-align: right; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); }
+  .badge.min { border-color: transparent; background: var(--ink); color: var(--surface); }
+  .badge.wk { border-color: var(--ink-2); color: var(--ink); font-weight: 600; }
+  tr.month-sep td { padding-top: 10px; }
+
+  .hero > *, .card, .tile { min-width: 0; }
+  @media (max-width: 760px) {
+    .hero { grid-template-columns: minmax(0, 1fr); }
+    .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .card { padding: 16px; }
+    .wrap { padding-top: 20px; }
+    .temp-num { font-size: 46px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>🌡 투자온도계</h1>
+      <div class="sub" id="sub"></div>
+    </div>
+    <div class="muted">미국장 종가 기준 · 나스닥100</div>
+  </header>
+
+  <section class="hero">
+    <div class="card gauge">
+      <svg id="thermo" width="76" height="200" viewBox="0 0 76 200" aria-hidden="true"></svg>
+      <div>
+        <div class="muted">오늘의 온도</div>
+        <div class="temp-num" id="temp"></div>
+        <div class="status" id="status"></div>
+        <div class="scale" style="width:120px">
+          <div class="scale-bar" id="tscalebar" style="height:6px"></div>
+          <div class="scale-ticks"><span style="left:0">0</span><span style="left:50%">50</span><span style="left:100%">100</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>지표</h2>
+      <div class="tiles" id="tiles"></div>
+      <div class="scale">
+        <div class="scale-bar" id="scalebar"></div>
+        <div class="scale-ticks"><span style="left:0">0</span><span style="left:20%">20 ↓ 하늘색</span><span style="left:50%">50</span><span style="left:75%">75</span><span style="left:100%">100</span></div>
+        <div class="muted" style="margin-top:6px"><span class="star">★</span>공포탐욕 &lt; 20 · RSI 주간 ≤ 40 · RSI 일간 30~50 · Slow %K &lt; 20</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card chart-card" id="chartcard">
+    <h2>온도 추이</h2>
+    <div class="muted" style="margin:-8px 0 10px">이번 달은 매일 · 지난달·지지난달은 매주 토요일 값(금요일 종가) · 그 이전은 월별 최저 온도만 표시됩니다</div>
+    <svg id="chart" width="100%" height="240" role="img" aria-label="온도 추이 차트"></svg>
+    <div class="tip" id="tip"></div>
+  </section>
+
+  <section class="card">
+    <h2>기록</h2>
+    <div class="table-wrap"><table id="table"></table></div>
+  </section>
+</div>
+
+<script>
+const DATA = [{"date": "2026-01-20", "nas100_close": 24987.57, "fear_greed": 50.9, "fear_greed_rating": "neutral", "rsi_weekly": 54.33, "rsi_daily": 39.92, "slow_k": 39.49, "slow_d": 52.41, "temperature": 46.2, "status": "중립 (Neutral)", "updated_at": "2026-11-05 07:18", "drawdown_pct": -4.33, "ath_close": 26119.85, "ath_date": "2025-10-29", "kind": "monthly_min"}, {"date": "2026-02-05", "nas100_close": 24548.69, "fear_greed": 34.9, "fear_greed_rating": "fear", "rsi_weekly": 49.59, "rsi_daily": 34.57, "slow_k": 17.12, "slow_d": 34.22, "temperature": 34.0, "status": "서늘함 (Fear)", "updated_at": "2026-11-05 07:18", "drawdown_pct": -6.02, "ath_close": 26119.85, "ath_date": "2025-10-29", "kind": "monthly_min"}, {"date": "2026-03-30", "nas100_close": 22953.38, "fear_greed": 5.8, "fear_greed_rating": "extreme fear", "rsi_weekly": 35.23, "rsi_daily": 29.0, "slow_k": 2.56, "slow_d": 9.41, "temperature": 18.1, "status": "냉각 (Extreme Fear)", "updated_at": "2026-11-05 07:18", "drawdown_pct": -12.12, "ath_close": 26119.85, "ath_date": "2025-10-29", "kind": "monthly_min"}, {"date": "2026-04-01", "nas100_close": 24019.99, "fear_greed": 15.9, "fear_greed_rating": "extreme fear", "rsi_weekly": 45.95, "rsi_daily": 46.4, "slow_k": 35.5, "slow_d": 18.35, "temperature": 35.9, "status": "서늘함 (Fear)", "updated_at": "2026-11-05 07:18", "drawdown_pct": -8.04, "ath_close": 26119.85, "ath_date": "2025-10-29", "kind": "monthly_min"}, {"date": "2026-05-19", "nas100_close": 28818.84, "fear_greed": 59.3, "fear_greed_rating": "greed", "rsi_weekly": 70.35, "rsi_daily": 65.28, "slow_k": 74.09, "slow_d": 82.99, "temperature": 67.3, "status": "따뜻함 (Greed)", "updated_at": "2026-11-05 07:18", "drawdown_pct": -2.57, "ath_close": 29580.3, "ath_date": "2026-05-14", "kind": "monthly_min"}, {"date": "2026-06-10", "nas100_close": 28508.03, "fear_greed": 27.3, "fear_greed_rating": "fear", "rsi_weekly": 61.92, "rsi_daily": 43.49, "slow_k": 28.44, "slow_d": 35.17, "temperature": 40.3, "status": "중립 (Neutral)", "updated_at": "2026-11-05 07:18", "drawdown_pct": -7.02, "ath_close": 30660.6, "ath_date": "2026-06-02", "kind": "monthly_min"}, {"date": "2026-07-29", "nas100_close": 27192.31, "fear_greed": 25.6, "fear_greed_rating": "fear", "rsi_weekly": 48.18, "rsi_daily": 32.06, "slow_k": 8.57, "slow_d": 9.46, "temperature": 28.6, "status": "서늘함 (Fear)", "updated_at": "2026-11-05 07:18", "drawdown_pct": -11.31, "ath_close": 30660.6, "ath_date": "2026-06-02", "kind": "monthly_min"}, {"date": "2026-08-26", "nas100_close": 29224.52, "fear_greed": 53.9, "fear_greed_rating": "neutral", "rsi_weekly": 56.84, "rsi_daily": 49.15, "slow_k": 20.94, "slow_d": 22.0, "temperature": 45.2, "status": "중립 (Neutral)", "updated_at": "2026-11-05 07:18", "drawdown_pct": -4.68, "ath_close": 30660.6, "ath_date": "2026-06-02", "kind": "monthly_min"}, {"date": "2026-09-04", "nas100_close": 29544.15, "fear_greed": 45.2, "fear_greed_rating": "neutral", "rsi_weekly": 58.54, "rsi_daily": 53.58, "slow_k": 47.47, "slow_d": 33.71, "temperature": 51.2, "status": "중립 (Neutral)", "updated_at": "2026-11-05 07:18", "drawdown_pct": -3.64, "ath_close": 30660.6, "ath_date": "2026-06-02", "kind": "weekly"}, {"date": "2026-09-11", "nas100_close": 29368.44, "fear_greed": 33.1, "fear_greed_rating": "fear", "rsi_weekly": 57.24, "rsi_daily": 50.66, "slow_k": 48.11, "slow_d": 57.23, "temperature": 47.3, "status": "중립 (Neutral)", "updated_at": "2026-11-05 07:18", "drawdown_pct": -4.21, "ath_close": 30660.6, "ath_date": "2026-06-02", "kind": "weekly"}, {"date": "2026-09-18", "nas100_close": 29644.17, "fear_greed": 28.5, "fear_greed_rating": "fear", "rsi_weekly": 58.78, "rsi_daily": 55.84, "slow_k": 62.44, "slow_d": 37.81, "temperature": 51.4, "status": "중립 (Neutral)", "updated_at": "2026-11-05 07:18", "drawdown_pct": -3.32, "ath_close": 30660.6, "ath_date": "2026-06-02", "kind": "weekly"}, {"date": "2026-09-25", "nas100_close": 30608.13, "fear_greed": 36.9, "fear_greed_rating": "fear", "rsi_weekly": 63.71, "rsi_daily": 64.72, "slow_k": 87.53, "slow_d": 90.05, "temperature": 63.2, "status": "따뜻함 (Greed)", "updated_at": "2026-11-05 07:18", "drawdown_pct": -0.4, "ath_close": 30732.4, "ath_date": "2026-09-22", "kind": "weekly"}, {"date": "2026-10-02", "nas100_close": 30807.93, "fear_greed": 38.2, "fear_greed_rating": "fear", "rsi_weekly": 64.65, "rsi_daily": 65.3, "slow_k": 86.48, "slow_d": 82.55, "temperature": 63.7, "status": "따뜻함 (Greed)", "updated_at": "2026-11-05 07:18", "drawdown_pct": 0.0, "ath_close": 30807.93, "ath_date": "2026-10-02", "kind": "weekly"}, {"date": "2026-10-09", "nas100_close": 30883.15, "fear_greed": 43.5, "fear_greed_rating": "fear", "rsi_weekly": 65.02, "rsi_daily": 60.89, "slow_k": 69.34, "slow_d": 80.92, "temperature": 59.7, "status": "중립 (Neutral)", "updated_at": "2026-11-05 07:18", "drawdown_pct": -1.09, "ath_close": 31224.47, "ath_date": "2026-10-06", "kind": "weekly"}, {"date": "2026-10-16", "nas100_close": 29187.55, "fear_greed": 18.2, "fear_greed_rating": "extreme fear", "rsi_weekly": 51.89, "rsi_daily": 35.23, "slow_k": 12.66, "slow_d": 22.09, "temperature": 29.5, "status": "서늘함 (Fear)", "updated_at": "2026-11-05 07:18", "drawdown_pct": -6.52, "ath_close": 31224.47, "ath_date": "2026-10-06", "kind": "weekly"}, {"date": "2026-10-23", "nas100_close": 28957.53, "fear_greed": 16.7, "fear_greed_rating": "extreme fear", "rsi_weekly": 50.41, "rsi_daily": 36.67, "slow_k": 14.03, "slow_d": 18.68, "temperature": 29.5, "status": "서늘함 (Fear)", "updated_at": "2026-11-05 07:18", "drawdown_pct": -7.26, "ath_close": 31224.47, "ath_date": "2026-10-06", "kind": "weekly"}, {"date": "2026-10-30", "nas100_close": 28384.85, "fear_greed": 26.3, "fear_greed_rating": "fear", "rsi_weekly": 46.81, "rsi_daily": 34.9, "slow_k": 29.07, "slow_d": 33.36, "temperature": 34.3, "status": "서늘함 (Fear)", "updated_at": "2026-11-05 07:18", "drawdown_pct": -9.09, "ath_close": 31224.47, "ath_date": "2026-10-06", "kind": "weekly"}, {"date": "2026-11-02", "nas100_close": 27989.82, "fear_greed": 19.4, "fear_greed_rating": "extreme fear", "rsi_weekly": 44.45, "rsi_daily": 32.04, "slow_k": 13.86, "slow_d": 26.7, "temperature": 27.4, "status": "서늘함 (Fear)", "updated_at": "2026-11-05 07:18", "drawdown_pct": -10.36, "ath_close": 31224.47, "ath_date": "2026-10-06", "kind": "daily"}, {"date": "2026-11-03", "nas100_close": 28180.26, "fear_greed": 23.5, "fear_greed_rating": "extreme fear", "rsi_weekly": 45.56, "rsi_daily": 34.81, "slow_k": 7.7, "slow_d": 16.88, "temperature": 27.9, "status": "서늘함 (Fear)", "updated_at": "2026-11-05 07:18", "drawdown_pct": -9.75, "ath_close": 31224.47, "ath_date": "2026-10-06", "kind": "daily"}, {"date": "2026-11-04", "nas100_close": 28437.17, "fear_greed": 27.3, "fear_greed_rating": "fear", "rsi_weekly": 47.18, "rsi_daily": 38.47, "slow_k": 11.8, "slow_d": 11.12, "temperature": 31.2, "status": "서늘함 (Fear)", "updated_at": "2026-11-05 07:39", "drawdown_pct": -8.93, "ath_close": 31224.47, "ath_date": "2026-10-06", "kind": "daily"}];
+const KIND = { daily: '일간', weekly: '주간(금)', monthly_min: '월 최저' };
+
+/* ---------- 색상: 20 이하 = 하늘색, 20 초과 = 빨강 한 가지(값이 클수록 진하게) ---------- */
+const SKY = 'rgb(142,205,245)';
+const RED = [[0xfd,0xe2,0xde],[0xe0,0x4a,0x3c],[0x7a,0x12,0x12]];   // 옅음 → 진함
+const LOW = 20;
+const lerp = (a,b,t) => a + (b-a)*t;
+function ramp(stops, t) {
+  const seg = t <= 0.5 ? 0 : 1, u = t <= 0.5 ? t/0.5 : (t-0.5)/0.5;
+  return stops[seg].map((c,i) => Math.round(lerp(c, stops[seg+1][i], u)));
+}
+function colorFor(v) {
+  if (v == null || isNaN(v)) return { bg: 'transparent', fg: 'var(--ink-3)' };
+  v = Math.max(0, Math.min(100, v));
+  if (v <= LOW) return { bg: SKY, fg: '#0b0b0b' };
+  const t = (v - LOW) / (100 - LOW);
+  const [r,g,b] = ramp(RED, t);
+  return { bg: `rgb(${r},${g},${b})`, fg: t > 0.42 ? '#ffffff' : '#0b0b0b' };
+}
+const fmtDD = v => v == null || isNaN(v) ? '–' : (v >= 0 ? '0.00%' : Number(v).toFixed(2) + '%');
+const fmt = (v, d=1) => v == null || isNaN(v) ? '–' : Number(v).toFixed(d);
+/* 온도 전용: 50 미만 파랑, 50 이상 빨강 (50에서 멀어질수록 진하게) */
+const T_BLUE = [[0xdc,0xea,0xfb],[0x55,0x98,0xe7],[0x0d,0x36,0x6b]];
+const T_RED  = [[0xfd,0xe2,0xde],[0xe0,0x4a,0x3c],[0x7a,0x12,0x12]];
+function tempColor(v) {
+  if (v == null || isNaN(v)) return { bg: 'transparent', fg: 'var(--ink-3)' };
+  v = Math.max(0, Math.min(100, v));
+  const t = Math.abs(v - 50) / 50;
+  const [r,g,b] = ramp(v < 50 ? T_BLUE : T_RED, t);
+  return { bg: `rgb(${r},${g},${b})`, fg: t > 0.42 ? '#ffffff' : '#0b0b0b' };
+}
+const tchip = v => { const c = tempColor(v); return `<span class="chip" style="background:${c.bg};color:${c.fg}">${fmt(v)}</span>`; };
+const chip = (v, d=1) => { const c = colorFor(v); return `<span class="chip" style="background:${c.bg};color:${c.fg}">${fmt(v,d)}</span>`; };
+/* 별표 조건 */
+const STAR = {
+  fear_greed: v => v < 20,
+  rsi_weekly: v => v <= 40,
+  rsi_daily:  v => v >= 30 && v <= 50,
+  slow_k:     v => v < 20,
+};
+const starOf = (r, key) => r[key] != null && !isNaN(r[key]) && STAR[key](r[key]);
+const schip = (r, key) => (starOf(r, key) ? '<span class="star" title="조건 충족">★</span>' : '') + chip(r[key]);
+
+/* ---------- 헤더 / 히어로 ---------- */
+const rows = [...DATA].sort((a,b) => a.date.localeCompare(b.date));
+const last = rows[rows.length - 1];
+
+if (!last) {
+  document.querySelector('.wrap').insertAdjacentHTML('beforeend', '<p>아직 기록이 없습니다.</p>');
+} else {
+  document.getElementById('sub').textContent = `${last.date} 종가 · 업데이트 ${last.updated_at}`;
+  const tc = tempColor(last.temperature);
+  document.getElementById('temp').innerHTML = `${fmt(last.temperature)}<small>°</small>`;
+  const st = document.getElementById('status');
+  st.textContent = last.status; st.style.background = tc.bg; st.style.color = tc.fg;
+
+  // 온도계 SVG
+  const T = Math.max(0, Math.min(100, last.temperature));
+  const top = 10, bot = 150, h = (bot - top) * T / 100;
+  document.getElementById('thermo').innerHTML = `
+    <rect x="22" y="${top-2}" width="20" height="${bot-top+16}" rx="10" fill="var(--grid)"/>
+    <rect x="27" y="${bot - h}" width="10" height="${h + 12}" rx="5" fill="${tc.bg}"/>
+    <circle cx="32" cy="172" r="20" fill="var(--grid)"/>
+    <circle cx="32" cy="172" r="14" fill="${tc.bg}"/>
+    ${[0,50,100].map(v => { const y = bot - (bot-top)*v/100; return `<line x1="44" x2="50" y1="${y}" y2="${y}" stroke="var(--ink-3)"/><text x="52" y="${y+4}" style="font-size:9px">${v}</text>`; }).join('')}`;
+
+  // 지표 타일
+  const tiles = [
+    ['NAS100 종가', `<span>${Number(last.nas100_close).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`],
+    ['전고점', `<span>${Number(last.ath_close).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span><div class="muted" style="font-weight:400;margin-top:2px">${last.ath_date}</div>`],
+    ['전고점 대비 하락률', `<span>${fmtDD(last.drawdown_pct)}</span>`],
+    ['공포탐욕지수', schip(last, 'fear_greed') + (last.fear_greed_rating ? ` <span class="muted">${last.fear_greed_rating}</span>` : '')],
+    ['RSI(14) 주간', schip(last, 'rsi_weekly')],
+    ['RSI(14) 일간', schip(last, 'rsi_daily')],
+    ['Slow %K (14,3)', schip(last, 'slow_k')],
+  ];
+  document.getElementById('tiles').innerHTML = tiles.map(([k,v]) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+
+  // 스케일 막대
+  const stops = [`${SKY} 0%`, `${SKY} ${LOW}%`]; for (let v = LOW + 0.01; v <= 100; v += 5) stops.push(`${colorFor(v).bg} ${v}%`); stops.push(`${colorFor(100).bg} 100%`);
+  const tstops = []; for (let v = 0; v <= 100; v += 5) tstops.push(`${tempColor(v).bg} ${v}%`);
+  document.getElementById('tscalebar').style.background = `linear-gradient(90deg, ${tstops.join(',')})`;
+  document.getElementById('scalebar').style.background = `linear-gradient(90deg, ${stops.join(',')})`;
+
+  drawChart(); drawTable();
+}
+
+/* ---------- 차트 ---------- */
+function drawChart() {
+  const svg = document.getElementById('chart'), tip = document.getElementById('tip'), card = document.getElementById('chartcard');
+  const W = svg.clientWidth || 800, H = 240, m = { l: 34, r: 12, t: 10, b: 26 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const ts = rows.map(r => +new Date(r.date));
+  const t0 = Math.min(...ts), t1 = Math.max(...ts), span = (t1 - t0) || 1;
+  const x = t => rows.length === 1 ? m.l + iw/2 : m.l + (t - t0) / span * iw;
+  const y = v => m.t + ih - v / 100 * ih;
+
+  let g = '';
+  [0,25,50,75,100].forEach(v => {
+    g += `<line x1="${m.l}" x2="${W-m.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)" ${v===50?'stroke-dasharray="4 4" stroke="var(--ink-3)"':''}/>`;
+    g += `<text x="${m.l-8}" y="${y(v)+4}" text-anchor="end">${v}</text>`;
+  });
+  // x 라벨: 최대 6개
+  // x 라벨: 서로 70px 이상 떨어진 것만, 마지막 날짜는 항상 표시
+  const lastX = x(ts[rows.length-1]); let prevX = -Infinity;
+  rows.forEach((r,i) => {
+    const px = x(ts[i]), isLast = i === rows.length-1;
+    if (isLast || (px - prevX >= 70 && lastX - px >= 70)) {
+      g += `<text x="${px}" y="${H-6}" text-anchor="${isLast && rows.length>1 ? 'end' : 'middle'}">${r.date.slice(2).replace(/-/g,'.')}</text>`;
+      prevX = px;
+    }
+  });
+  if (rows.length > 1) g += `<polyline fill="none" stroke="var(--ink-3)" stroke-width="2" stroke-linejoin="round" points="${rows.map((r,i)=>`${x(ts[i])},${y(r.temperature)}`).join(' ')}"/>`;
+  rows.forEach((r,i) => {
+    const c = tempColor(r.temperature).bg;
+    g += `<circle cx="${x(ts[i])}" cy="${y(r.temperature)}" r="${rows.length > 60 ? 3.5 : 5}" fill="${c}" stroke="var(--surface)" stroke-width="2"/>`;
+  });
+  g += `<rect id="hit" x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent"/>`;
+  g += `<line id="cross" y1="${m.t}" y2="${m.t+ih}" stroke="var(--ink-3)" stroke-width="1" opacity="0"/>`;
+  svg.innerHTML = g;
+
+  const hit = svg.querySelector('#hit'), cross = svg.querySelector('#cross');
+  hit.addEventListener('mousemove', e => {
+    const bx = e.clientX - svg.getBoundingClientRect().left;
+    let best = 0; rows.forEach((r,i) => { if (Math.abs(x(ts[i]) - bx) < Math.abs(x(ts[best]) - bx)) best = i; });
+    const r = rows[best], px = x(ts[best]);
+    cross.setAttribute('x1', px); cross.setAttribute('x2', px); cross.setAttribute('opacity', 1);
+    tip.innerHTML = `${r.date}${KIND[r.kind] && r.kind!=='daily' ? ' · ' + KIND[r.kind] : ''}<br><b>${fmt(r.temperature)}°</b> ${r.status}<br>
+      <span class="muted">공포탐욕 ${fmt(r.fear_greed)} · 전고점 ${Number(r.ath_close).toLocaleString('en-US',{maximumFractionDigits:0})} · 하락률 ${fmtDD(r.drawdown_pct)} · RSI주 ${fmt(r.rsi_weekly)} · RSI일 ${fmt(r.rsi_daily)} · %K ${fmt(r.slow_k)}</span>`;
+    const cr = card.getBoundingClientRect(), sr = svg.getBoundingClientRect();
+    const left = sr.left - cr.left + px, tw = tip.offsetWidth;
+    tip.style.left = Math.max(8, Math.min(cr.width - tw - 8, left - tw/2)) + 'px';
+    tip.style.top = (sr.top - cr.top + y(r.temperature) - tip.offsetHeight - 14) + 'px';
+    tip.style.opacity = 1;
+  });
+  hit.addEventListener('mouseleave', () => { tip.style.opacity = 0; cross.setAttribute('opacity', 0); });
+}
+
+/* ---------- 표 ---------- */
+function drawTable() {
+  const head = `<tr><th>날짜</th><th>구분</th><th>온도</th><th>NAS100</th><th>전고점</th><th>전고점 대비</th><th>공포탐욕</th><th>RSI 주간</th><th>RSI 일간</th><th>Slow %K</th></tr>`;
+  let prevMonth = null;
+  const body = [...rows].reverse().map(r => {
+    const mon = r.date.slice(0,7), sep = prevMonth && prevMonth !== mon ? ' class="month-sep"' : ''; prevMonth = mon;
+    return `<tr${sep}>
+      <td>${r.date}</td>
+      <td><span class="badge ${r.kind==='monthly_min'?'min':r.kind==='weekly'?'wk':''}">${KIND[r.kind]||'일간'}</span></td>
+      <td>${tchip(r.temperature)}</td>
+      <td>${Number(r.nas100_close).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td>${Number(r.ath_close).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td>${fmtDD(r.drawdown_pct)}</td>
+      <td>${schip(r,'fear_greed')}</td><td>${schip(r,'rsi_weekly')}</td><td>${schip(r,'rsi_daily')}</td>
+      <td>${schip(r,'slow_k')}</td></tr>`;
+  }).join('');
+  document.getElementById('table').innerHTML = head + body;
+}
+
+let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => last && drawChart(), 120); });
+</script>
+</body>
+</html>
