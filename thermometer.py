@@ -271,8 +271,8 @@ def render_dashboard(hist: pd.DataFrame, monthly: pd.DataFrame, full: pd.DataFra
 PAGE_URL = "https://beckham0521-ship-it.github.io/invest-thermometer/"
 
 
-def telegram_message(r: pd.Series) -> str:
-    """대시보드 '오늘의 판단'과 같은 규칙으로 요약."""
+def telegram_message(r: pd.Series, full: pd.DataFrame | None = None) -> str:
+    """대시보드 '오늘의 판단'과 같은 규칙으로 요약 + 이번 달 최고점."""
     def f(v, d=1):
         return "-" if pd.isna(v) else f"{v:.{d}f}"
 
@@ -302,12 +302,23 @@ def telegram_message(r: pd.Series) -> str:
     else:
         sell = "해당 없음"
 
+    best_line = ""
+    if full is not None:
+        mon = full[full["date"].str[:7] == r["date"][:7]].dropna(subset=["buy_score"])
+        if len(mon):
+            b = mon.sort_values(["buy_score", "drawdown_pct", "date"], ascending=[False, True, True]).iloc[0]
+            dow = "월화수목금토일"[pd.Timestamp(b["date"]).dayofweek]
+            bm = int(b["buy_months"])
+            best_line = (f"• 이번 달 최고점: {b['date'][5:].replace('-', '/')}({dow}) "
+                         f"{int(b['buy_score'])}점 · {f'{bm}개월분' if bm else '추가 매수 없음'}\n")
+
     return (
         f"🧭 <b>투자온도계</b> {r['date']} 종가\n\n"
         f"• 정기 적립: {dca}\n"
         f"• 추가 매수: <b>{add}</b>\n"
         f"• 하락장: {bear}\n"
-        f"• 수익 실현: {sell}\n\n"
+        f"• 수익 실현: {sell}\n"
+        f"{best_line}\n"
         f"NAS100 {r['nas100_close']:,.0f} ({r['drawdown_pct']:+.1f}%)\n"
         f"VIX {f(r['vix'])}\n"
         f"RSI 일 {f(r['rsi_daily'])} / 주 {f(r['rsi_weekly'])}\n"
@@ -318,14 +329,14 @@ def telegram_message(r: pd.Series) -> str:
     )
 
 
-def send_telegram(r: pd.Series) -> None:
+def send_telegram(r: pd.Series, full: pd.DataFrame | None = None) -> None:
     token, chat = os.environ.get("TELEGRAM_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
     if not token or not chat:
         return  # 설정 안 돼 있으면 조용히 건너뜀 (PC 실행 등)
     try:
         resp = requests.post(
             f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": chat, "text": telegram_message(r), "parse_mode": "HTML",
+            json={"chat_id": chat, "text": telegram_message(r, full), "parse_mode": "HTML",
                   "disable_web_page_preview": True},
             timeout=20,
         )
@@ -388,7 +399,7 @@ def main() -> None:
           f"이평선 {row['pts_ma']}({row['ma_level'] or '-'}) · VIX {row['pts_vix']} (VIX {row['vix']})")
     print(f" 이번에 계산한 거래일: {len(new)}일 / 원본 {len(full)}일 / 표시 {len(hist)}개")
     print(f" 대시보드: {DASHBOARD}\n")
-    send_telegram(row)
+    send_telegram(row, full)
 
 
 if __name__ == "__main__":
