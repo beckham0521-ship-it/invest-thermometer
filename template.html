@@ -532,10 +532,10 @@ function drawSignals() {
     : r.rsi_weekly <= CFG.wl
     ? [CFG.low1[0], '하락장 신호', CFG.low1[1], `RSI 주간 ${fmt(r.rsi_weekly)} ≤ ${CFG.wl} · ${CFG.low1[2]}`]
     : ['', '하락장 신호', '해당 없음', `RSI 주간 ${fmt(r.rsi_weekly)} (${CFG.wl} 이하일 때 표시)`]);
-  // 4. 수익 실현
-  if (r.rsi_weekly >= CFG.wh_trim) cards.push(['sell', '수익 실현', '30% 내외 실현 고려', `RSI 주간 ${fmt(r.rsi_weekly)} ≥ ${CFG.wh_trim} · 이후 3개월 성과가 약했던 구간`]);
-  else if (r.rsi_weekly >= CFG.wh_stop) cards.push(['sell', '수익 실현', '추가 매수 멈춤', `RSI 주간 ${fmt(r.rsi_weekly)} ≥ ${CFG.wh_stop} · 정기 적립은 계속`]);
-  else cards.push(['', '수익 실현', '해당 없음', `RSI 주간 ${fmt(r.rsi_weekly)} (${CFG.wh_stop} 이상일 때 표시)`]);
+  // 4. 고점 (팔지 않고 추가 매수만 멈춤, 정리는 리밸런싱 때)
+  if (r.rsi_weekly >= CFG.wh_trim) cards.push(['sell', '고점 신호', '추가 매수 멈춤', `RSI 주간 ${fmt(r.rsi_weekly)} ≥ ${CFG.wh_trim} · 강한 과열, 팔지 말고 많이 오른 비중은 리밸런싱 때 정리`]);
+  else if (r.rsi_weekly >= CFG.wh_stop) cards.push(['sell', '고점 신호', '추가 매수 멈춤', `RSI 주간 ${fmt(r.rsi_weekly)} ≥ ${CFG.wh_stop} · 정기 적립은 계속`]);
+  else cards.push(['', '고점 신호', '해당 없음', `RSI 주간 ${fmt(r.rsi_weekly)} (${CFG.wh_stop} 이상일 때 표시)`]);
   document.getElementById('signals').innerHTML = cards.map(([cls, k, v, d]) =>
     `<div class="sig ${cls ? 'on ' + cls : ''}"><div class="k">${k}</div><div class="v">${v}</div><div class="d">${d}</div></div>`).join('');
 }

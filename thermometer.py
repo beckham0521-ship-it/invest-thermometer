@@ -60,26 +60,26 @@ BACKFILL_START = "2026-01-01"
 PAGE_URL = "https://beckham0521-ship-it.github.io/invest-thermometer/"
 
 INDEXES = [
-    # slow: 적립 조건 Slow 기준 / wl, wl2: RSI 주간 저점 1·2단계 / wh_stop, wh_trim: RSI 주간 고점(추가 매수 멈춤 / 일부 실현)
+    # slow: 적립 조건 Slow 기준 / wl, wl2: RSI 주간 저점 1·2단계 / wh_stop, wh_trim: RSI 주간 고점(추가 매수 멈춤 / 강한 과열) — 매도는 리밸런싱 때만
     {"key": "ndx", "tab": "QQQ", "name": "나스닥100", "short": "NAS100", "ticker": "^NDX", "etf": "QQQ",
      "full": "history_full.csv", "hist": "history.csv", "page": "index.html",
      "slow": 20, "fg": 15, "wl": 40, "wl2": 35, "wh_stop": 67, "wh_trim": 70, "triple": "",
      "low1": ["warn", "⚠ 분할 매수", "하락이 길어질 수 있어 3~4주에 나눠서 (검증: 이후 6개월 상승확률 47~60%)"],
      "low2": ["warn", "⚠ 분할 매수 · 비중 확대", "1년 성과는 좋았지만(+6~10%p) 6개월 상승확률은 38~46%라 반드시 나눠서"],
-     "note": "2011~2026 나스닥100 검증: 적립 조건은 Slow<20 · RSI일 30~40 · 공탐<15 (범위를 좁힐수록 ★★ 날 성과 개선) · 추가 매수 금액은 피라미딩 점수 · RSI 주간 ≤ 40은 하락이 길어질 수 있어 분할 매수 · RSI 주간 ≥ 70부터 이후 3개월 성과가 약해 일부 실현"},
+     "note": "2011~2026 나스닥100 검증: 적립 조건은 Slow<20 · RSI일 30~40 · 공탐<15 (범위를 좁힐수록 ★★ 날 성과 개선) · 추가 매수 금액은 피라미딩 점수 · RSI 주간 ≤ 40은 하락이 길어질 수 있어 분할 매수 · RSI 주간 고점에선 추가 매수만 멈추고 매도는 리밸런싱 때만 (수익 실현은 수익률을 깎았음)"},
     {"key": "sox", "tab": "SOXX", "name": "필라델피아 반도체", "short": "SOX", "ticker": "^SOX", "etf": "SOXX",
      "full": "history_full_sox.csv", "hist": "history_sox.csv", "page": "sox.html",
      "slow": 10, "fg": 20, "wl": 40, "wl2": 35, "wh_stop": 75, "wh_trim": 78,
      "triple": "반도체는 ★★★ 날이 급락 한가운데인 경우가 많았음 (이후 1년 평균보다 3~6%p 낮음) → 2~3번 나눠서",
      "low1": ["buy", "적극 매수 구간", "반도체는 RSI 주간 40 이하 이후 반등이 컸음 (검증: 1년 상승확률 92~94%)"],
      "low2": ["buy", "최대 매수 구간", "RSI 주간 35 이하 이후 1년 상승확률 100% (검증: 평균보다 +33~43%p)"],
-     "note": "2011~2026 반도체 검증: 변동성이 커서 Slow는 10 미만일 때만 적립 조건으로 인정 · RSI 주간 ≤ 40 적극 매수, ≤ 35 최대 매수 · 상승 추세가 강해 RSI 주간 78 이상에서만 일부 실현"},
+     "note": "2011~2026 반도체 검증: 변동성이 커서 Slow는 10 미만일 때만 적립 조건으로 인정 · RSI 주간 ≤ 40 적극 매수, ≤ 35 최대 매수 · 상승 추세가 강해 RSI 주간 75 이상에서만 추가 매수 멈춤, 매도는 리밸런싱 때만"},
     {"key": "spx", "tab": "VOO", "name": "S&P500", "short": "S&P500", "ticker": "^GSPC", "etf": "VOO",
      "full": "history_full_spx.csv", "hist": "history_spx.csv", "page": "spx.html",
      "slow": 20, "fg": 15, "wl": 40, "wl2": 35, "wh_stop": 67, "wh_trim": 70, "triple": "",
      "low1": ["buy", "적극 매수 구간", "S&P500은 RSI 주간 40 이하 이후 성과가 좋았음 (검증: 1년 상승확률 87~93%)"],
      "low2": ["buy", "최대 매수 구간", "RSI 주간 35 이하 이후 1년 상승확률 100% (검증: 평균보다 +15~17%p)"],
-     "note": "2011~2026 S&P500 검증: 적립 조건은 현재 기준 유지 · RSI 주간 ≤ 40 적극 매수, ≤ 35 최대 매수 · RSI 주간 ≥ 70 이후 1년 성과가 평균보다 5~9%p 낮아 세 지수 중 수익 실현 신호가 가장 잘 맞음"},
+     "note": "2011~2026 S&P500 검증: 적립 조건은 현재 기준 유지 · RSI 주간 ≤ 40 적극 매수, ≤ 35 최대 매수 · RSI 주간 ≥ 67이면 추가 매수 멈춤 (고점 신호가 세 지수 중 가장 잘 맞음), 매도는 리밸런싱 때만"},
 ]
 KST = timezone(timedelta(hours=9))
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
@@ -373,11 +373,14 @@ def todo_lines(ix: dict, r: pd.Series, n: int, ctx: dict) -> list[str]:
     day = _today_kst().day
     if ctx.get("rebal"):
         out.append("🔄 리밸런싱 주간: 맨 아래 내 IRP 칸 수량대로 매도·매수 먼저")
-    # 1) 수익 실현 / 멈춤
+    if ctx.get("ended"):
+        out.append("적립 기간 종료 → 새 매수 없음 · 매년 1월 리밸런싱만")
+        return out
+    # 1) 고점: 팔지 않고 추가 매수만 멈춤
     if rw >= ix["wh_trim"]:
-        out.append("수익 실현: 평가 수익 30% 내외 매도 고려 (IRP 안이라 세금 없음) · 새 매수 멈춤")
+        out.append("고점(강한 과열): 추가 매수 멈춤 · 팔지 않기 → 많이 오른 비중은 리밸런싱 때 정리")
     elif rw >= ix["wh_stop"]:
-        out.append("추가 매수 멈춤 · 정기 적립만")
+        out.append("고점: 추가 매수 멈춤 · 정기 적립은 계속")
     # 2) 하락 구간 추가 매수 (당겨쓰기)
     if rw < ix["wh_stop"] and months >= 2:
         if n == 3 and ix.get("triple"):
@@ -431,7 +434,7 @@ def index_block(ix: dict, r: pd.Series, full: pd.DataFrame, latest: str | None =
     else:
         bear = "해당 없음"
     if rw >= ix["wh_trim"]:
-        sell = f"RSI주 ≥ {ix['wh_trim']} → 수익 30% 내외 실현 고려"
+        sell = f"RSI주 ≥ {ix['wh_trim']} → 추가 매수 멈춤 (강한 과열, 매도는 리밸런싱 때만)"
     elif rw >= ix["wh_stop"]:
         sell = f"RSI주 ≥ {ix['wh_stop']} → 추가 매수 멈춤"
     else:
@@ -454,11 +457,11 @@ def index_block(ix: dict, r: pd.Series, full: pd.DataFrame, latest: str | None =
         f"• 정기 적립: {dca}\n"
         f"• 추가 매수: <b>{add}</b>\n"
         f"• 하락장: {bear}\n"
-        f"• 수익 실현: {sell}\n"
+        f"• 고점: {sell}\n"
         f"{best}"
         f"{short} {r['nas100_close']:,.0f} (전고점 대비 {r['drawdown_pct']:+.1f}%)\n"
         f"RSI 일 {_f(r['rsi_daily'])} (별 30~40 · 점수 ≤40/≤35)\n"
-        f"RSI 주 {_f(rw)} (하락장 ≤{ix['wl']}/≤{ix['wl2']} · 실현 ≥{ix['wh_stop']}/≥{ix['wh_trim']})\n"
+        f"RSI 주 {_f(rw)} (하락장 ≤{ix['wl']}/≤{ix['wl2']} · 멈춤 ≥{ix['wh_stop']})\n"
         f"Slow {_f(r['slow_k'])} (별 &lt;{ix['slow']} · 점수 ≤20/≤10)\n"
         f"공탐 {_f(r['fear_greed'])} (별 &lt;{ix['fg']} · 점수 ≤30/≤10)\n"
         f"이평선 {ma} (+{int(r['pts_ma'])}점)\n"
@@ -539,6 +542,7 @@ def irp_section(results: list) -> tuple[str, dict]:
             done = R <= monthly * (m_incl - 1) + monthly * 0.1
             M = m_incl - 1 if done else m_incl
         pulled = max(0.0, monthly * M - R)
+        ended = cur > en  # 적립 기간(end) 종료 → 새 매수 없음, 1월 리밸런싱만
 
         # 계획 끝에 목표 비중이 되도록 남은 투자금을 나누기 (매도 없음)
         gap = {k: max(0.0, w[k] * (Vt + R) - V[k]) for k in keys}
@@ -562,13 +566,14 @@ def irp_section(results: list) -> tuple[str, dict]:
                              f"{_man(need)} (약 {need / monthly:.1f}개월), 그동안 나머지는 쉬기")
 
         lines = [f"💼 <b>내 IRP</b> ({pdate} 국내 종가)",
-                 f"평가 {_man(Vt)} · 남은 투자금 {_man(R)} · 남은 {M}개월",
+                 f"평가 {_man(Vt)}" + ("" if ended else f" · 남은 투자금 {_man(R)} · 남은 {M}개월"),
                  "비중 " + " / ".join(f"{100 * V[k] / Vt:.0f}" for k in keys) + "% → 목표 "
                  + " / ".join(f"{100 * w[k]:.0f}" for k in keys) + "%",
-                 "이번 달 정기 매수: 완료 ✅ (아래는 다음 달 기준)" if done else "이번 달 정기 매수: <b>아직</b>"]
-        if prio_line:
+                 ("✅ 적립 기간 종료 → 새 매수 없음, 매년 1월 리밸런싱만 (주식 전체를 목표 비중으로)" if ended
+                  else "이번 달 정기 매수: 완료 ✅ (아래는 다음 달 기준)" if done else "이번 달 정기 매수: <b>아직</b>")]
+        if prio_line and not ended:
             lines.append(prio_line)
-        for k in keys:
+        for k in ([] if ended else keys):
             sh = round(base[k] / price[k])
             line = f"• {KR_ETF[k][1]}: 기본 {sh}주 ({_man(base[k])}) · 신호 {sig.get(k, 0)}개월분"
             mk = sig.get(k, 0)
@@ -576,7 +581,7 @@ def irp_section(results: list) -> tuple[str, dict]:
                 amt = min(base[k] * mk, gap[k])
                 line += f" → 하락 구간 최대 {round(amt / price[k])}주 ({_man(amt)})"
             lines.append(line)
-        if pulled > monthly * 0.1:
+        if pulled > monthly * 0.1 and not ended:
             lines.append(f"앞당겨 쓴 금액: {_man(pulled)} (그만큼 이후 정기 매수 쉬기)")
         # ---- 리밸런싱 ----
         rebal = False
@@ -602,7 +607,8 @@ def irp_section(results: list) -> tuple[str, dict]:
         if Vt > limit * 0.95:
             lines.append(f"⚠ 위험자산 {_man(Vt)} / 한도 {_man(limit)} (70%)에 근접")
         lines.append("<i>매수 후 update_irp.ps1 로 보유 수량·남은 투자금 업데이트</i>")
-        ctx = {"done": done, "rest": rest, "prio_name": KR_ETF[prio][1] if prio in KR_ETF else "", "rebal": rebal}
+        ctx = {"done": done, "rest": rest, "prio_name": KR_ETF[prio][1] if prio in KR_ETF else "", "rebal": rebal,
+               "ended": ended}
         return "\n".join(lines), ctx
     except Exception as e:  # noqa: BLE001
         return f"💼 내 IRP: 계산 실패 ({_html.escape(type(e).__name__)})", {}
