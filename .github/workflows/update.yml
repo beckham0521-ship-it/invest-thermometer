@@ -2,8 +2,8 @@ name: 투자온도계 업데이트
 
 on:
   schedule:
-    # 22:30 UTC 월~금 = 한국시간 화~토 07:30 (미국장 마감 후)
-    - cron: "30 22 * * 1-5"
+    # 23:00 UTC 월~금 = 한국시간 화~토 08:00 (미국장 마감 후)
+    - cron: "0 23 * * 1-5"
   workflow_dispatch: {}   # 수동 실행 버튼
 
 permissions:
@@ -33,6 +33,9 @@ jobs:
 
       - name: 지표 계산 및 대시보드 생성
         run: python thermometer.py
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
       - name: 기록 저장 (커밋)
         run: |

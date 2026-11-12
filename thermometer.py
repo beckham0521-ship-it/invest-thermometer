@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -267,6 +268,70 @@ def render_dashboard(hist: pd.DataFrame, monthly: pd.DataFrame, full: pd.DataFra
     DASHBOARD.write_text(html, encoding="utf-8")
 
 
+PAGE_URL = "https://beckham0521-ship-it.github.io/invest-thermometer/"
+
+
+def telegram_message(r: pd.Series) -> str:
+    """대시보드 '오늘의 판단'과 같은 규칙으로 요약."""
+    def f(v, d=1):
+        return "-" if pd.isna(v) else f"{v:.{d}f}"
+
+    met = []
+    if r["slow_k"] < 20:
+        met.append("Slow")
+    if 30 <= r["rsi_daily"] <= 50:
+        met.append("RSI일")
+    if pd.notna(r["fear_greed"]) and r["fear_greed"] < 20:
+        met.append("공탐")
+    n = len(met)
+    stars = "★" * n + "☆" * (3 - n)
+    if n >= 2:
+        dca = f"{stars} 좋은 날 → 이번 달 적립 매수 ({' · '.join(met)})"
+    elif n == 1:
+        dca = f"{stars} 보통 ({met[0]}만 충족)"
+    else:
+        dca = f"{stars} 대기"
+
+    months, score = int(r["buy_months"]), int(r["buy_score"])
+    add = f"{months}개월분 ({score}점 · {r['buy_zone']})" if months else f"없음 ({score}점)"
+    bear = f"⚠ RSI주 {f(r['rsi_weekly'])} ≤ 40 → 나눠서 매수" if r["rsi_weekly"] <= 40 else "해당 없음"
+    if r["rsi_weekly"] >= 72:
+        sell = f"RSI주 {f(r['rsi_weekly'])} ≥ 72 → 수익 30% 내외 실현 고려"
+    elif r["rsi_weekly"] >= 67:
+        sell = f"RSI주 {f(r['rsi_weekly'])} ≥ 67 → 추가 매수 멈춤"
+    else:
+        sell = "해당 없음"
+
+    return (
+        f"🧭 <b>투자온도계</b> {r['date']} 종가\n\n"
+        f"• 정기 적립: {dca}\n"
+        f"• 추가 매수: <b>{add}</b>\n"
+        f"• 하락장: {bear}\n"
+        f"• 수익 실현: {sell}\n\n"
+        f"NAS100 {r['nas100_close']:,.0f} ({r['drawdown_pct']:+.1f}%) · VIX {f(r['vix'])}\n"
+        f"RSI 일 {f(r['rsi_daily'])} / 주 {f(r['rsi_weekly'])} · Slow {f(r['slow_k'])} · 공탐 {f(r['fear_greed'])}\n"
+        f"이평선 {r['ma_level'] if isinstance(r['ma_level'], str) else '도달 없음'}\n\n"
+        f'<a href="{PAGE_URL}">대시보드 열기</a>'
+    )
+
+
+def send_telegram(r: pd.Series) -> None:
+    token, chat = os.environ.get("TELEGRAM_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
+    if not token or not chat:
+        return  # 설정 안 돼 있으면 조용히 건너뜀 (PC 실행 등)
+    try:
+        resp = requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat, "text": telegram_message(r), "parse_mode": "HTML",
+                  "disable_web_page_preview": True},
+            timeout=20,
+        )
+        resp.raise_for_status()
+        print(" 텔레그램 전송 완료")
+    except Exception as e:  # noqa: BLE001
+        print(f"[경고] 텔레그램 전송 실패: {type(e).__name__}", file=sys.stderr)
+
+
 def main() -> None:
     try:
         sys.stdout.reconfigure(encoding="utf-8")  # 작업 스케줄러 실행 시 인코딩 오류 방지
@@ -320,6 +385,7 @@ def main() -> None:
           f"이평선 {row['pts_ma']}({row['ma_level'] or '-'}) · VIX {row['pts_vix']} (VIX {row['vix']})")
     print(f" 이번에 계산한 거래일: {len(new)}일 / 원본 {len(full)}일 / 표시 {len(hist)}개")
     print(f" 대시보드: {DASHBOARD}\n")
+    send_telegram(row)
 
 
 if __name__ == "__main__":
