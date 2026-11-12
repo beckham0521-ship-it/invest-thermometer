@@ -366,6 +366,11 @@ def _f(v, d=1):
     return "-" if pd.isna(v) else f"{v:.{d}f}"
 
 
+def star_count(ix: dict, r: pd.Series) -> int:
+    return (int(r["slow_k"] < ix["slow"]) + int(30 <= r["rsi_daily"] <= 40)
+            + int(pd.notna(r["fear_greed"]) and r["fear_greed"] < ix["fg"]))
+
+
 def todo_lines(ix: dict, r: pd.Series, n: int, ctx: dict) -> list[str]:
     """전략 메시지 규칙대로 오늘 할 일."""
     out = []
@@ -393,9 +398,13 @@ def todo_lines(ix: dict, r: pd.Series, n: int, ctx: dict) -> list[str]:
             how = "이번 주 안에"
         out.append(f"추가 매수: 이번 하락 구간에 {months}개월분까지 채우기 (이미 당겨 산 만큼 빼고) → {how}")
     # 3) 정기 적립
-    if ix["key"] in ctx.get("rest", set()):
-        out.append(f"정기 적립: {ctx.get('prio_name', '')} 우선 기간이라 쉬기")
-    elif ctx.get("done"):
+    if ctx.get("done"):
+        out.append("정기 적립: 이번 달 완료 → 다음 달 ★★ 날 기다리기")
+    elif ix["key"] in ctx.get("rest", set()):
+        p = ctx.get("prio_name", "")
+        out.append(f"정기 적립: <b>오늘 ★★ → 이번 달 몫(목표의 절반) 매수</b> ({p} 우선 기간, 이미 샀으면 건너뛰기)" if n >= 2
+                   else f"정기 적립: {p} 우선 기간 → ★★ 날에만 목표의 절반 매수")
+    elif False:
         out.append("정기 적립: 이번 달 완료 → 다음 달 ★★ 날 기다리기")
     elif n >= 2:
         out.append("정기 적립: <b>오늘 매수</b> (★★ 좋은 날)")
@@ -521,6 +530,7 @@ def irp_section(results: list) -> tuple[str, dict]:
         hold, w = cfg["holdings"], cfg["weights"]
         R, monthly = float(cfg["remaining"]), float(cfg.get("monthly", 750000))
         sig = {ix["key"]: int(r["buy_months"]) for ix, r, _ in results}
+        stars = {ix["key"]: star_count(ix, r) for ix, r, _ in results}
         keys = [ix["key"] for ix, _, _ in results if ix["key"] in KR_ETF]
 
         price, pdate = {}, ""
@@ -551,19 +561,19 @@ def irp_section(results: list) -> tuple[str, dict]:
         base = {k: (gap[k] / M if M > 0 else 0.0) for k in keys}
 
         # 우선 매수 모드: 지정한 ETF가 목표 비중이 될 때까지 월 적립액을 그 ETF에 먼저
-        prio, prio_line, rest = cfg.get("priority"), "", set()
+        prio, prio_line, rest, prio_min = cfg.get("priority"), "", set(), 0.0
         if prio in keys and M > 0:
             need = max(0.0, (w[prio] * Vt - V[prio]) / (1 - w[prio]))  # 신규 자금만으로 목표 비중까지
             if need > monthly * 0.05:
-                bp = min(monthly, need)
-                rest = monthly - bp
                 others = [k for k in keys if k != prio]
-                og = sum(gap[k] for k in others) or 1.0
-                base = {k: (bp if k == prio else rest * gap[k] / og) for k in keys}
+                half = {k: 0.5 * w[k] * monthly for k in others}  # 목표보다 많은 ETF: 목표 몫의 절반, ★★ 날에만
+                base = {k: (monthly if k == prio else half[k]) for k in keys}
+                prio_min = monthly - sum(half.values())
                 gap[prio] = need
                 rest = set(others)
-                prio_line = (f"{KR_ETF[prio][1]} 우선: 비중 {100 * V[prio] / Vt:.0f}% → {100 * w[prio]:.0f}%까지 "
-                             f"{_man(need)} (약 {need / monthly:.1f}개월), 그동안 나머지는 쉬기")
+                names = "·".join(KR_ETF[k][1] for k in others)
+                prio_line = (f"{KR_ETF[prio][1]} 우선: 비중 {100 * V[prio] / Vt:.0f}% → {100 * w[prio]:.0f}%까지 {_man(need)} "
+                             f"· {names}는 ★★ 날에만 목표의 절반, 나머지는 {KR_ETF[prio][1]}")
 
         lines = [f"💼 <b>내 IRP</b> ({pdate} 국내 종가)",
                  f"평가 {_man(Vt)}" + ("" if ended else f" · 남은 투자금 {_man(R)} · 남은 {M}개월"),
@@ -575,8 +585,17 @@ def irp_section(results: list) -> tuple[str, dict]:
             lines.append(prio_line)
         for k in ([] if ended else keys):
             sh = round(base[k] / price[k])
-            line = f"• {KR_ETF[k][1]}: 기본 {sh}주 ({_man(base[k])}) · 신호 {sig.get(k, 0)}개월분"
             mk = sig.get(k, 0)
+            st = "★" * stars.get(k, 0) + "☆" * (3 - stars.get(k, 0))
+            if k in rest:
+                line = (f"• {KR_ETF[k][1]}: <b>오늘 ★★ → {sh}주 ({_man(base[k])}) 매수</b>" if stars.get(k, 0) >= 2
+                        else f"• {KR_ETF[k][1]}: ★★ 날에만 {sh}주 ({_man(base[k])}) · 지금 {st}")
+                line += f" · 신호 {mk}개월분"
+            elif rest and k == prio:
+                line = (f"• {KR_ETF[k][1]}: 기본 {round(prio_min / price[k])}~{sh}주 ({_man(prio_min)}~{_man(base[k])}, "
+                        f"다른 ETF 산 만큼 뺀 나머지) · {st} · 신호 {mk}개월분")
+            else:
+                line = f"• {KR_ETF[k][1]}: 기본 {sh}주 ({_man(base[k])}) · 신호 {mk}개월분"
             if mk >= 2:
                 amt = min(base[k] * mk, gap[k])
                 line += f" → 하락 구간 최대 {round(amt / price[k])}주 ({_man(amt)})"
