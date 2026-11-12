@@ -366,7 +366,46 @@ def _f(v, d=1):
     return "-" if pd.isna(v) else f"{v:.{d}f}"
 
 
-def index_block(ix: dict, r: pd.Series, full: pd.DataFrame, latest: str | None = None) -> str:
+def todo_lines(ix: dict, r: pd.Series, n: int, ctx: dict) -> list[str]:
+    """전략 메시지 규칙대로 오늘 할 일."""
+    out = []
+    rw, months = r["rsi_weekly"], int(r["buy_months"])
+    day = datetime.now(KST).day
+    # 1) 수익 실현 / 멈춤
+    if rw >= ix["wh_trim"]:
+        out.append("수익 실현: 평가 수익 30% 내외 매도 고려 (IRP 안이라 세금 없음) · 새 매수 멈춤")
+    elif rw >= ix["wh_stop"]:
+        out.append("추가 매수 멈춤 · 정기 적립만")
+    # 2) 하락 구간 추가 매수 (당겨쓰기)
+    if rw < ix["wh_stop"] and months >= 2:
+        if n == 3 and ix.get("triple"):
+            how = "급락 중일 수 있어 2~3번 나눠서"
+        elif rw <= ix["wl"] and ix["low1"][0] == "warn":
+            how = "하락이 길어질 수 있어 3~4주에 나눠서"
+        elif rw <= ix["wl"]:
+            how = "적극 매수 구간이라 이번 주 안에"
+        else:
+            how = "이번 주 안에"
+        out.append(f"추가 매수: 이번 하락 구간에 {months}개월분까지 채우기 (이미 당겨 산 만큼 빼고) → {how}")
+    # 3) 정기 적립
+    if ix["key"] in ctx.get("rest", set()):
+        out.append(f"정기 적립: {ctx.get('prio_name', '')} 우선 기간이라 쉬기")
+    elif ctx.get("done"):
+        out.append("정기 적립: 이번 달 완료 → 다음 달 ★★ 날 기다리기")
+    elif n >= 2:
+        out.append("정기 적립: <b>오늘 매수</b> (★★ 좋은 날)")
+    elif n == 1 and day >= 20:
+        out.append("정기 적립: 이번 달 ★★ 날이 없었으면 오늘 매수")
+    elif n == 0 and day >= 24:
+        out.append("정기 적립: 월말이라 이번 주 안에 매수")
+    else:
+        out.append("정기 적립: ★★ 날 기다리기")
+    return out
+
+
+def index_block(ix: dict, r: pd.Series, full: pd.DataFrame, latest: str | None = None,
+                ctx: dict | None = None) -> str:
+    ctx = ctx or {}
     met = []
     if r["slow_k"] < ix["slow"]:
         met.append("Slow")
@@ -376,7 +415,7 @@ def index_block(ix: dict, r: pd.Series, full: pd.DataFrame, latest: str | None =
         met.append("공탐")
     n = len(met)
     stars = "★" * n + "☆" * (3 - n)
-    dca = (f"{stars} 좋은 날 → 적립 매수 ({' · '.join(met)})" if n >= 2
+    dca = (f"{stars} 좋은 날 ({' · '.join(met)})" if n >= 2
            else f"{stars} 보통 ({met[0]}만 충족)" if n == 1 else f"{stars} 대기")
     if n == 3 and ix.get("triple"):
         dca += f"\n  ⚠ {ix['triple']}"
@@ -384,15 +423,15 @@ def index_block(ix: dict, r: pd.Series, full: pd.DataFrame, latest: str | None =
     add = f"{months}개월분 ({score}점 · {r['buy_zone']})" if months else f"없음 ({score}점)"
     rw = r["rsi_weekly"]
     if rw <= ix["wl2"]:
-        bear = f"RSI주 {_f(rw)} ≤ {ix['wl2']} → {ix['low2'][1]}"
+        bear = f"RSI주 ≤ {ix['wl2']} → {ix['low2'][1]}"
     elif rw <= ix["wl"]:
-        bear = f"RSI주 {_f(rw)} ≤ {ix['wl']} → {ix['low1'][1]}"
+        bear = f"RSI주 ≤ {ix['wl']} → {ix['low1'][1]}"
     else:
         bear = "해당 없음"
     if rw >= ix["wh_trim"]:
-        sell = f"RSI주 {_f(rw)} ≥ {ix['wh_trim']} → 수익 30% 내외 실현 고려"
+        sell = f"RSI주 ≥ {ix['wh_trim']} → 수익 30% 내외 실현 고려"
     elif rw >= ix["wh_stop"]:
-        sell = f"RSI주 {_f(rw)} ≥ {ix['wh_stop']} → 추가 매수 멈춤"
+        sell = f"RSI주 ≥ {ix['wh_stop']} → 추가 매수 멈춤"
     else:
         sell = "해당 없음"
     best = ""
@@ -405,19 +444,22 @@ def index_block(ix: dict, r: pd.Series, full: pd.DataFrame, latest: str | None =
                 f"{int(b['buy_score'])}점 · {f'{bm}개월분' if bm else '추가 매수 없음'}\n")
     ma = r["ma_level"] if isinstance(r["ma_level"], str) else "도달 없음"
     name, etf, short = (_html.escape(ix[k]) for k in ("name", "etf", "short"))  # S&P 의 & 처리
+    todo = "".join(f" · {t}\n" for t in todo_lines(ix, r, n, ctx))
     return (
         f"<b>📈 {name}</b> ({etf})"
         + (f" ⚠ {r['date'][5:].replace('-', '/')} 값" if latest and r["date"] < latest else "") + "\n"
-        f""
+        f"👉 <b>오늘 할 일</b>\n{todo}"
         f"• 정기 적립: {dca}\n"
         f"• 추가 매수: <b>{add}</b>\n"
         f"• 하락장: {bear}\n"
         f"• 수익 실현: {sell}\n"
         f"{best}"
-        f"{short} {r['nas100_close']:,.0f} ({r['drawdown_pct']:+.1f}%)\n"
-        f"RSI 일 {_f(r['rsi_daily'])} / 주 {_f(r['rsi_weekly'])}\n"
-        f"Slow {_f(r['slow_k'])}\n"
-        f"이평선 {ma}\n"
+        f"{short} {r['nas100_close']:,.0f} (전고점 대비 {r['drawdown_pct']:+.1f}%)\n"
+        f"RSI 일 {_f(r['rsi_daily'])} (별 30~40 · 점수 ≤40/≤35)\n"
+        f"RSI 주 {_f(rw)} (하락장 ≤{ix['wl']}/≤{ix['wl2']} · 실현 ≥{ix['wh_stop']}/≥{ix['wh_trim']})\n"
+        f"Slow {_f(r['slow_k'])} (별 &lt;{ix['slow']} · 점수 ≤20/≤10)\n"
+        f"공탐 {_f(r['fear_greed'])} (별 &lt;{ix['fg']} · 점수 ≤30/≤10)\n"
+        f"이평선 {ma} (+{int(r['pts_ma'])}점)\n"
         f'<a href="{PAGE_URL}{"" if ix["page"] == "index.html" else ix["page"]}">대시보드 열기</a>'
     )
 
@@ -446,10 +488,10 @@ def _kr_price(tk: str) -> tuple[float, str]:
     return with_retry(get, f"{tk} 국내 ETF")
 
 
-def irp_section(results: list) -> str:
+def irp_section(results: list) -> tuple[str, dict]:
     raw = os.environ.get("IRP_CONFIG")
     if not raw:
-        return ""
+        return "", {}
     try:
         cfg = json.loads(raw.lstrip("\ufeff").strip())  # PowerShell이 붙이는 BOM 제거
         hold, w = cfg["holdings"], cfg["weights"]
@@ -484,7 +526,7 @@ def irp_section(results: list) -> str:
         base = {k: (gap[k] / M if M > 0 else 0.0) for k in keys}
 
         # 우선 매수 모드: 지정한 ETF가 목표 비중이 될 때까지 월 적립액을 그 ETF에 먼저
-        prio, prio_line = cfg.get("priority"), ""
+        prio, prio_line, rest = cfg.get("priority"), "", set()
         if prio in keys and M > 0:
             need = max(0.0, (w[prio] * Vt - V[prio]) / (1 - w[prio]))  # 신규 자금만으로 목표 비중까지
             if need > monthly * 0.05:
@@ -494,6 +536,7 @@ def irp_section(results: list) -> str:
                 og = sum(gap[k] for k in others) or 1.0
                 base = {k: (bp if k == prio else rest * gap[k] / og) for k in keys}
                 gap[prio] = need
+                rest = set(others)
                 prio_line = (f"{KR_ETF[prio][1]} 우선: 비중 {100 * V[prio] / Vt:.0f}% → {100 * w[prio]:.0f}%까지 "
                              f"{_man(need)} (약 {need / monthly:.1f}개월), 그동안 나머지는 쉬기")
 
@@ -518,22 +561,23 @@ def irp_section(results: list) -> str:
         if Vt > limit * 0.95:
             lines.append(f"⚠ 위험자산 {_man(Vt)} / 한도 {_man(limit)} (70%)에 근접")
         lines.append("<i>매수 후 update_irp.ps1 로 보유 수량·남은 투자금 업데이트</i>")
-        return "\n".join(lines)
+        ctx = {"done": done, "rest": rest, "prio_name": KR_ETF[prio][1] if prio in KR_ETF else ""}
+        return "\n".join(lines), ctx
     except Exception as e:  # noqa: BLE001
-        return f"💼 내 IRP: 계산 실패 ({_html.escape(type(e).__name__)})"
+        return f"💼 내 IRP: 계산 실패 ({_html.escape(type(e).__name__)})", {}
 
 
 def telegram_message(results: list) -> str:
     r0 = max((r for _, r, _ in results), key=lambda r: r["date"])
     head = (f"🧭 <b>투자온도계</b> {r0['date']} 종가\n"
-            f"공탐 {_f(r0['fear_greed'])} · VIX {_f(r0['vix'])}\n")
+            f"공탐 {_f(r0['fear_greed'])} · VIX {_f(r0['vix'])} (점수 ≥30/40/50)\n")
     if WARNINGS:
         head += "\n⚠ <b>확인 필요</b>\n" + "".join(f"• {_html.escape(w)}\n" for w in WARNINGS)
     else:
         head += f"✅ 데이터 확인: 모두 {r0['date']} 값\n"
     latest = max(r["date"] for _, r, _ in results)
-    body = "\n\n".join(index_block(ix, r, full, latest) for ix, r, full in results)
-    irp = irp_section(results)
+    irp, ctx = irp_section(results)
+    body = "\n\n".join(index_block(ix, r, full, latest, ctx) for ix, r, full in results)
     return head + "\n" + body + (f"\n\n{irp}" if irp else "")
 
 
