@@ -370,7 +370,9 @@ def todo_lines(ix: dict, r: pd.Series, n: int, ctx: dict) -> list[str]:
     """전략 메시지 규칙대로 오늘 할 일."""
     out = []
     rw, months = r["rsi_weekly"], int(r["buy_months"])
-    day = datetime.now(KST).day
+    day = _today_kst().day
+    if ctx.get("rebal"):
+        out.append("🔄 리밸런싱 주간: 맨 아래 내 IRP 칸 수량대로 매도·매수 먼저")
     # 1) 수익 실현 / 멈춤
     if rw >= ix["wh_trim"]:
         out.append("수익 실현: 평가 수익 30% 내외 매도 고려 (IRP 안이라 세금 없음) · 새 매수 멈춤")
@@ -488,6 +490,25 @@ def _kr_price(tk: str) -> tuple[float, str]:
     return with_retry(get, f"{tk} 국내 ETF")
 
 
+def _today_kst():
+    """오늘 날짜(KST). 시험용으로 THERMO_TODAY=YYYY-MM-DD 로 바꿀 수 있음."""
+    t = os.environ.get("THERMO_TODAY")
+    return datetime.strptime(t, "%Y-%m-%d").date() if t else datetime.now(KST).date()
+
+
+def next_rebalance(today, first: str, month: int):
+    """다음 리밸런싱 주 시작일 (그 달 1~7일). first='2027-03' 이 첫 시행, 이후 매년 month월."""
+    fy, fm = map(int, first.split("-"))
+    first_d = today.replace(year=fy, month=fm, day=1)
+    if today <= first_d.replace(day=7):
+        return first_d
+    y = today.year
+    cand = today.replace(year=y, month=month, day=1)
+    if cand <= first_d or today > cand.replace(day=7):
+        cand = today.replace(year=y + 1, month=month, day=1)
+    return cand
+
+
 def irp_section(results: list) -> tuple[str, dict]:
     raw = os.environ.get("IRP_CONFIG")
     if not raw:
@@ -509,7 +530,7 @@ def irp_section(results: list) -> tuple[str, dict]:
         def ym(x):
             y, m = map(int, x.split("-"))
             return y * 12 + m
-        now = datetime.now(KST)
+        now = _today_kst()
         cur, st, en = now.year * 12 + now.month, ym(cfg["start"]), ym(cfg["end"])
         if cur < st:
             done, M = True, en - st + 1
@@ -557,11 +578,31 @@ def irp_section(results: list) -> tuple[str, dict]:
             lines.append(line)
         if pulled > monthly * 0.1:
             lines.append(f"앞당겨 쓴 금액: {_man(pulled)} (그만큼 이후 정기 매수 쉬기)")
+        # ---- 리밸런싱 ----
+        rebal = False
+        rb = next_rebalance(now, cfg.get("rebalance_first", "2027-03"), int(cfg.get("rebalance_month", 1)))
+        days = (rb - now).days
+        rb_txt = f"{rb.year}년 {rb.month}월 첫째 주"
+        if days <= 0 or 0 < days <= 7:
+            rebal = days <= 0
+            lines.append(("🔄 <b>리밸런싱 주간</b> (" if rebal else f"🔄 <b>다음 주 리밸런싱 예정</b> ({rb_txt}, ")
+                         + "목표 비중 맞추기 · 매도 먼저, 그 돈으로 매수)")
+            for k in keys:
+                diff = w[k] * Vt - V[k]
+                sh = int(round(diff / price[k]))
+                if sh == 0:
+                    lines.append(f"• {KR_ETF[k][1]}: 그대로")
+                else:
+                    lines.append(f"• {KR_ETF[k][1]}: {'+' if sh > 0 else ''}{sh}주 {'매수' if sh > 0 else '매도'} "
+                                 f"({'+' if diff > 0 else ''}{_man(diff)})")
+            lines.append("IRP 안 매도라 세금 없음 · 끝나면 update_irp.ps1 로 수량 업데이트")
+        else:
+            lines.append(f"다음 리밸런싱: {rb_txt} (D-{days})")
         limit = float(cfg.get("irp_total", 50000000)) * 0.7
         if Vt > limit * 0.95:
             lines.append(f"⚠ 위험자산 {_man(Vt)} / 한도 {_man(limit)} (70%)에 근접")
         lines.append("<i>매수 후 update_irp.ps1 로 보유 수량·남은 투자금 업데이트</i>")
-        ctx = {"done": done, "rest": rest, "prio_name": KR_ETF[prio][1] if prio in KR_ETF else ""}
+        ctx = {"done": done, "rest": rest, "prio_name": KR_ETF[prio][1] if prio in KR_ETF else "", "rebal": rebal}
         return "\n".join(lines), ctx
     except Exception as e:  # noqa: BLE001
         return f"💼 내 IRP: 계산 실패 ({_html.escape(type(e).__name__)})", {}
