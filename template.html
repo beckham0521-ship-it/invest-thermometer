@@ -96,6 +96,10 @@
     .temp-num { font-size: 46px; }
   }
 
+  /* 데이터 확인 */
+  .dwarn { margin: -4px 0 14px; padding: 10px 14px; border-radius: 10px; font-size: 13px; line-height: 1.6;
+           background: rgba(250,178,25,.18); color: var(--ink); border: 1px solid rgba(250,178,25,.5); }
+  .dok { margin: -8px 0 12px; font-size: 12px; color: var(--ink-3); }
   /* 탭 */
   .tabs { display: flex; gap: 6px; margin: -6px 0 16px; overflow-x: auto; }
   .tabs a { flex: 0 0 auto; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line);
@@ -171,6 +175,7 @@
     <div class="muted">미국장 종가 기준 · __INDEX_NAME__ · 매매 __ETF__</div>
   </header>
   <nav class="tabs"><!--__TABS__--></nav>
+  <div id="datawarn"></div>
 
   <section class="card sig-card">
     <h2>🧭 오늘의 판단</h2>
@@ -535,6 +540,13 @@ function drawSignals() {
     `<div class="sig ${cls ? 'on ' + cls : ''}"><div class="k">${k}</div><div class="v">${v}</div><div class="d">${d}</div></div>`).join('');
 }
 document.getElementById('signote').textContent = CFG.note || '';
+(function () {
+  const el = document.getElementById('datawarn'), w = CFG.warn || [];
+  const esc = x => String(x).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  el.innerHTML = w.length
+    ? `<div class="dwarn"><b>⚠ 확인 필요</b><br>${w.map(esc).join('<br>')}</div>`
+    : `<div class="dok">✅ 데이터 확인: 모두 ${esc(CFG.data_date || '')} 값</div>`;
+})();
 if (last) { drawSignals(); drawPyramid(); drawChart(); drawMonthly(); drawTable(); bindToggle('table'); bindToggle('montable'); }
 let rz, lastW = 0;
 new ResizeObserver(() => {

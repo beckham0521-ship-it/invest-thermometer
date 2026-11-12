@@ -43,6 +43,7 @@ import html as _html
 import json
 import os
 import sys
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -104,47 +105,96 @@ def slow_stoch(df: pd.DataFrame, k: int = 14, smooth: int = 3, d: int = 3):
 
 
 # ---------- 데이터 수집 ----------
+FG_BACKUP_URL = "https://raw.githubusercontent.com/whit3rabbit/fear-greed-data/main/fear-greed.csv"
+WARNINGS: list[str] = []  # 오늘 값 확인용 경고 (메시지·대시보드에 표시)
+
+
+def with_retry(fn, what: str, tries: int = 3):
+    """실패하면 다시 시도. GitHub Actions에서는 60초, PC에서는 5초 간격."""
+    wait = 60 if os.environ.get("CI") else 5
+    for i in range(1, tries + 1):
+        try:
+            return fn()
+        except Exception as e:  # noqa: BLE001
+            print(f"[재시도] {what} 실패 {i}/{tries}: {type(e).__name__}: {e}", file=sys.stderr)
+            if i == tries:
+                raise
+            time.sleep(wait)
+
+
 def fetch_ndx() -> pd.DataFrame:
     return fetch_index("^NDX")
 
 
-def fetch_index(ticker: str) -> pd.DataFrame:
+def _download(ticker: str) -> pd.DataFrame:
     df = yf.download(ticker, period="max", interval="1d", auto_adjust=False, progress=False)
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
     df = df.dropna(subset=["Close"])
     if df.empty:
-        raise RuntimeError(f"{ticker} 데이터를 가져오지 못했습니다.")
+        raise RuntimeError(f"{ticker} 데이터가 비어 있음")
     df.index = pd.to_datetime(df.index).tz_localize(None).normalize()
     return df
 
 
+def fetch_index(ticker: str) -> pd.DataFrame:
+    return with_retry(lambda: _download(ticker), f"{ticker} 가격")
+
+
 def fetch_vix() -> pd.Series:
     try:
-        v = yf.download("^VIX", period="10y", interval="1d", auto_adjust=False, progress=False)
-        if isinstance(v.columns, pd.MultiIndex):
-            v.columns = v.columns.get_level_values(0)
-        v.index = pd.to_datetime(v.index).tz_localize(None).normalize()
-        return v["Close"].dropna()
-    except Exception as e:  # noqa: BLE001
-        print(f"[경고] VIX 수집 실패: {e}", file=sys.stderr)
+        return with_retry(lambda: _download("^VIX"), "VIX")["Close"]
+    except Exception:  # noqa: BLE001
         return pd.Series(dtype=float)
 
 
-def fetch_fear_greed(since: str) -> dict[str, tuple[float, str]]:
-    """날짜(YYYY-MM-DD) -> (점수, 등급). 같은 날짜가 여러 개면 마지막 값."""
+def _fg_cnn(since: str) -> dict:
     url = f"https://production.dataviz.cnn.io/index/fearandgreed/graphdata/{since}"
+    r = requests.get(url, headers=UA, timeout=20)
+    r.raise_for_status()
+    out = {}
+    for p in r.json()["fear_and_greed_historical"]["data"]:
+        day = datetime.fromtimestamp(p["x"] / 1000, timezone.utc).date().isoformat()
+        out[day] = (round(float(p["y"]), 1), p.get("rating"))
+    if not out:
+        raise RuntimeError("CNN 응답에 데이터 없음")
+    return out
+
+
+def fetch_fear_greed(since: str) -> dict[str, tuple[float, str]]:
+    """CNN 공포탐욕지수. 날짜(YYYY-MM-DD) -> (점수, 등급). 실패하면 빈 dict."""
     try:
-        r = requests.get(url, headers=UA, timeout=20)
+        return with_retry(lambda: _fg_cnn(since), "CNN 공포탐욕")
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def fetch_fear_greed_backup() -> dict[str, tuple[float, str]]:
+    """대체 출처: CNN 값을 매일 모아 공개하는 GitHub 데이터 (whit3rabbit/fear-greed-data)."""
+    def get():
+        r = requests.get(FG_BACKUP_URL, headers=UA, timeout=20)
         r.raise_for_status()
         out = {}
-        for p in r.json()["fear_and_greed_historical"]["data"]:
-            day = datetime.utcfromtimestamp(p["x"] / 1000).date().isoformat()
-            out[day] = (round(float(p["y"]), 1), p.get("rating"))
+        for line in r.text.splitlines()[1:]:
+            parts = line.strip().split(",")
+            if len(parts) >= 2 and parts[1]:
+                out[parts[0]] = (round(float(parts[1]), 1), parts[2] if len(parts) > 2 else None)
+        if not out:
+            raise RuntimeError("대체 출처 데이터 없음")
         return out
-    except Exception as e:  # noqa: BLE001
-        print(f"[경고] 공포탐욕지수 수집 실패: {e}", file=sys.stderr)
+    try:
+        return with_retry(get, "공포탐욕 대체 출처")
+    except Exception:  # noqa: BLE001
         return {}
+
+
+def latest_us_trading_day() -> str:
+    """미국 동부 기준 오늘(주말이면 직전 금요일). 휴장일은 고려하지 않음."""
+    et = datetime.now(timezone(timedelta(hours=-5)))
+    d = et.date()
+    while d.weekday() >= 5:
+        d -= timedelta(days=1)
+    return d.isoformat()
 
 
 # ---------- 피라미딩 매수 점수 ----------
@@ -297,6 +347,8 @@ def render_page(ix: dict, hist: pd.DataFrame, monthly: pd.DataFrame, full: pd.Da
     tabs = "".join(
         f'<a href="{o["page"]}" class="{"on" if o["key"] == ix["key"] else ""}">{o["tab"]}</a>' for o in INDEXES)
     cfg = {k: ix[k] for k in ("slow", "wl", "wl2", "wh_stop", "wh_trim", "low1", "low2", "note")}
+    cfg["warn"] = WARNINGS
+    cfg["data_date"] = str(full["date"].max())
     html = (TEMPLATE.read_text(encoding="utf-8-sig")
             .replace("/*__DATA__*/[]", js(hist))
             .replace("/*__MONTHLY__*/[]", js(monthly))
@@ -313,7 +365,7 @@ def _f(v, d=1):
     return "-" if pd.isna(v) else f"{v:.{d}f}"
 
 
-def index_block(ix: dict, r: pd.Series, full: pd.DataFrame) -> str:
+def index_block(ix: dict, r: pd.Series, full: pd.DataFrame, latest: str | None = None) -> str:
     met = []
     if r["slow_k"] < ix["slow"]:
         met.append("Slow")
@@ -344,14 +396,16 @@ def index_block(ix: dict, r: pd.Series, full: pd.DataFrame) -> str:
     mon = full[full["date"].str[:7] == r["date"][:7]].dropna(subset=["buy_score"])
     if len(mon):
         b = mon.sort_values(["buy_score", "drawdown_pct", "date"], ascending=[False, True, True]).iloc[0]
-        dow = "월화수목금토일"[pd.Timestamp(b["date"]).dayofweek]
+        dow = "월화수목금토일"[pd.Timestamp(b["date"]).day_of_week]
         bm = int(b["buy_months"])
         best = (f"• 이번 달 최고점: {b['date'][5:].replace('-', '/')}({dow}) "
                 f"{int(b['buy_score'])}점 · {f'{bm}개월분' if bm else '추가 매수 없음'}\n")
     ma = r["ma_level"] if isinstance(r["ma_level"], str) else "도달 없음"
     name, etf, short = (_html.escape(ix[k]) for k in ("name", "etf", "short"))  # S&P 의 & 처리
     return (
-        f"<b>📈 {name}</b> ({etf})\n"
+        f"<b>📈 {name}</b> ({etf})"
+        + (f" ⚠ {r['date'][5:].replace('-', '/')} 값" if latest and r["date"] < latest else "") + "\n"
+        f""
         f"• 정기 적립: {dca}\n"
         f"• 추가 매수: <b>{add}</b>\n"
         f"• 하락장: {bear}\n"
@@ -366,10 +420,37 @@ def index_block(ix: dict, r: pd.Series, full: pd.DataFrame) -> str:
 
 
 def telegram_message(results: list) -> str:
-    r0 = results[0][1]
+    r0 = max((r for _, r, _ in results), key=lambda r: r["date"])
     head = (f"🧭 <b>투자온도계</b> {r0['date']} 종가\n"
             f"공탐 {_f(r0['fear_greed'])} · VIX {_f(r0['vix'])}\n")
-    return head + "\n" + "\n\n".join(index_block(ix, r, full) for ix, r, full in results)
+    if WARNINGS:
+        head += "\n⚠ <b>확인 필요</b>\n" + "".join(f"• {_html.escape(w)}\n" for w in WARNINGS)
+    else:
+        head += f"✅ 데이터 확인: 모두 {r0['date']} 값\n"
+    latest = max(r["date"] for _, r, _ in results)
+    return head + "\n" + "\n\n".join(index_block(ix, r, full, latest) for ix, r, full in results)
+
+
+def _post_telegram(text: str) -> None:
+    token, chat = os.environ.get("TELEGRAM_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
+    if not token or not chat:
+        return
+    requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                  json={"chat_id": chat, "text": text, "parse_mode": "HTML",
+                        "disable_web_page_preview": True}, timeout=20).raise_for_status()
+
+
+def send_failure_alert(e: Exception) -> None:
+    msg = (f"⚠ <b>투자온도계 업데이트 실패</b>\n"
+           f"원인: {_html.escape(type(e).__name__)}: {_html.escape(str(e))[:300]}\n\n"
+           f"대시보드는 이전 값 그대로입니다.\n"
+           f"GitHub → Actions → 투자온도계 업데이트 → Run workflow 로 다시 실행해 보세요.").replace("\n", "\n")
+    try:
+        _post_telegram(msg)
+        (BASE / ".alert_sent").write_text("1")
+        print(" 실패 알림 전송", file=sys.stderr)
+    except Exception as e2:  # noqa: BLE001
+        print(f"[경고] 실패 알림도 전송 실패: {type(e2).__name__}", file=sys.stderr)
 
 
 def send_telegram(results: list) -> None:
@@ -394,6 +475,14 @@ def main() -> None:
         sys.stdout.reconfigure(encoding="utf-8")  # 작업 스케줄러 실행 시 인코딩 오류 방지
     except Exception:  # noqa: BLE001
         pass
+    try:
+        run()
+    except Exception as e:  # noqa: BLE001
+        send_failure_alert(e)
+        raise
+
+
+def run() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--since", help="이 날짜부터 다시 채우기 (YYYY-MM-DD)")
     ap.add_argument("--only", help="이 지수만 (ndx/spx/sox)")
@@ -409,19 +498,56 @@ def main() -> None:
                              else pd.Timestamp(f["date"].max()) if not f.empty
                              else pd.Timestamp(BACKFILL_START))
 
-    fg = fetch_fear_greed((min(starts.values()) - pd.Timedelta(days=7)).date().isoformat())
-    # 공포탐욕 수집이 실패한 날은 이전에 저장해 둔 값을 유지 (모든 지수 기록에서)
+    since = (min(starts.values()) - pd.Timedelta(days=7)).date().isoformat()
+    fg_cnn = fetch_fear_greed(since)
+    fg_src = {d: "cnn" for d in fg_cnn}
+    fg = dict(fg_cnn)
+    vix = fetch_vix()
+
+    # 지수 가격 (지수 하나가 실패해도 나머지는 계속)
+    dfs = {}
+    for ix in targets:
+        try:
+            dfs[ix["key"]] = fetch_index(ix["ticker"])
+        except Exception as e:  # noqa: BLE001
+            WARNINGS.append(f"{ix['tab']} 가격 수집 실패 → 이전 값 표시 ({type(e).__name__})")
+    if targets and not dfs:
+        raise RuntimeError("세 지수 가격을 모두 가져오지 못했습니다 (야후 파이낸스)")
+    expected = max(df.index[-1] for df in dfs.values()).date().isoformat() if dfs else None
+
+    # 공포탐욕: 오늘 값이 CNN에 없으면 대체 출처
+    if expected and expected not in fg:
+        bk = fetch_fear_greed_backup()
+        for d, v in bk.items():
+            if d not in fg:
+                fg[d], fg_src[d] = v, "backup"
+    # 저장해 둔 과거 값으로 빈 날 채우기 (모든 지수 기록에서)
     for f in fulls.values():
         if not f.empty:
             for _, r in f.dropna(subset=["fear_greed"]).iterrows():
-                fg.setdefault(r["date"], (float(r["fear_greed"]), r["fear_greed_rating"]))
-    vix = fetch_vix()
+                if r["date"] not in fg:
+                    fg[r["date"]], fg_src[r["date"]] = (float(r["fear_greed"]), r["fear_greed_rating"]), "stored"
+
+    # ---- 오늘 값 확인 ----
+    if expected:
+        src = fg_src.get(expected)
+        if src is None:
+            WARNINGS.append(f"공탐: {expected} 값 수집 실패 → 점수·★ 계산에서 빠짐")
+        elif src == "backup":
+            WARNINGS.append("공탐: CNN 수집 실패 → 대체 출처(GitHub 공개 데이터) 값 사용")
+        if vix.empty:
+            WARNINGS.append("VIX: 수집 실패 → 점수에서 빠짐")
+        elif vix.index[-1].date().isoformat() < expected:
+            WARNINGS.append(f"VIX: {vix.index[-1].date().isoformat()} 값 사용 (최신 아님)")
+        should = latest_us_trading_day()
+        if expected < should:
+            WARNINGS.append(f"가격: 최신 거래일({should}) 데이터가 아직 없음 → {expected} 값 (미국 휴장일이면 정상)")
 
     results = []
     for ix in INDEXES:
         full = fulls[ix["key"]]
-        if ix in targets:
-            df = fetch_index(ix["ticker"])
+        if ix["key"] in dfs:
+            df = dfs[ix["key"]]
             dates = [d for d in df.index if d >= starts[ix["key"]]]
             new = pd.DataFrame(build_rows(df, dates, fg, vix))
             if not full.empty:
@@ -435,6 +561,8 @@ def main() -> None:
         hist.to_csv(BASE / ix["hist"], index=False, encoding="utf-8-sig")
         render_page(ix, hist, monthly_best(full), full)
         results.append((ix, full.iloc[-1], full))
+        if expected and full["date"].max() < expected and not any(w.startswith(ix["tab"]) for w in WARNINGS):
+            WARNINGS.append(f"{ix['tab']}: {full['date'].max()} 값 (최신 {expected} 아님)")
 
     for ix, row, _ in results:
         print(f"\n===== {ix['name']}  {row['date']} =====")
@@ -442,6 +570,7 @@ def main() -> None:
         print(f" RSI 일 {row['rsi_daily']} / 주 {row['rsi_weekly']} · Slow {row['slow_k']} · 공탐 {row['fear_greed']} · VIX {row['vix']}")
         print(f" 📐 매수 점수 {int(row['buy_score'])}점 ({row['buy_zone']}) → 추가 매수 {int(row['buy_months'])}개월분"
               f" · 이평선 {row['ma_level'] or '-'}")
+    print("\n 확인: " + (" / ".join(WARNINGS) if WARNINGS else "모두 최신 값"))
     print(f"\n 페이지: {SITE}\n")
     send_telegram(results)
 

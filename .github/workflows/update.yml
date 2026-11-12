@@ -51,3 +51,15 @@ jobs:
           path: site
       - id: deploy
         uses: actions/deploy-pages@v4
+
+      - name: 실패 알림 (파이썬이 못 보낸 경우)
+        if: failure()
+        run: |
+          if [ ! -f .alert_sent ]; then
+            curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+              -d chat_id="${TELEGRAM_CHAT_ID}" \
+              --data-urlencode text="⚠ 투자온도계 업데이트 실패 (GitHub Actions 단계 오류). 대시보드는 이전 값입니다. GitHub → Actions → 투자온도계 업데이트 → Run workflow 로 다시 실행해 보세요." > /dev/null
+          fi
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
