@@ -419,6 +419,91 @@ def index_block(ix: dict, r: pd.Series, full: pd.DataFrame, latest: str | None =
     )
 
 
+# ---------- 내 IRP (텔레그램 전용, 공개 페이지·로그에 절대 출력하지 않음) ----------
+KR_ETF = {  # 지수 key -> (야후 티커, 이름)
+    "ndx": ("133690.KS", "나스닥100"),
+    "sox": ("381180.KS", "반도체"),
+    "spx": ("379800.KS", "S&amp;P500"),
+}
+
+
+def _man(x: float) -> str:
+    return f"{x / 1e4:,.1f}만"
+
+
+def _kr_price(tk: str) -> tuple[float, str]:
+    def get():
+        d = yf.download(tk, period="10d", interval="1d", auto_adjust=False, progress=False)
+        if isinstance(d.columns, pd.MultiIndex):
+            d.columns = d.columns.get_level_values(0)
+        c = d["Close"].dropna()
+        if c.empty:
+            raise RuntimeError(f"{tk} 가격 없음")
+        return float(c.iloc[-1]), c.index[-1].strftime("%m/%d")
+    return with_retry(get, f"{tk} 국내 ETF")
+
+
+def irp_section(results: list) -> str:
+    raw = os.environ.get("IRP_CONFIG")
+    if not raw:
+        return ""
+    try:
+        cfg = json.loads(raw)
+        hold, w = cfg["holdings"], cfg["weights"]
+        R, monthly = float(cfg["remaining"]), float(cfg.get("monthly", 750000))
+        sig = {ix["key"]: int(r["buy_months"]) for ix, r, _ in results}
+        keys = [ix["key"] for ix, _, _ in results if ix["key"] in KR_ETF]
+
+        price, pdate = {}, ""
+        for k in keys:
+            price[k], pdate = _kr_price(KR_ETF[k][0])
+        V = {k: hold.get(k, 0) * price[k] for k in keys}
+        Vt = sum(V.values())
+
+        # 남은 개월 / 이번 달 정기 매수 완료 여부 (남은 투자금으로 추정)
+        def ym(x):
+            y, m = map(int, x.split("-"))
+            return y * 12 + m
+        now = datetime.now(KST)
+        cur, st, en = now.year * 12 + now.month, ym(cfg["start"]), ym(cfg["end"])
+        if cur < st:
+            done, M = True, en - st + 1
+        else:
+            m_incl = max(0, en - cur + 1)
+            done = R <= monthly * (m_incl - 1) + monthly * 0.1
+            M = m_incl - 1 if done else m_incl
+        pulled = max(0.0, monthly * M - R)
+
+        # 계획 끝에 목표 비중이 되도록 남은 투자금을 나누기 (매도 없음)
+        gap = {k: max(0.0, w[k] * (Vt + R) - V[k]) for k in keys}
+        g = sum(gap.values()) or 1.0
+        gap = {k: gap[k] * R / g for k in keys}
+        base = {k: (gap[k] / M if M > 0 else 0.0) for k in keys}
+
+        lines = [f"💼 <b>내 IRP</b> ({pdate} 국내 종가)",
+                 f"평가 {_man(Vt)} · 남은 투자금 {_man(R)} · 남은 {M}개월",
+                 "비중 " + " / ".join(f"{100 * V[k] / Vt:.0f}" for k in keys) + "% → 목표 "
+                 + " / ".join(f"{100 * w[k]:.0f}" for k in keys) + "%",
+                 "이번 달 정기 매수: 완료 ✅ (아래는 다음 달 기준)" if done else "이번 달 정기 매수: <b>아직</b>"]
+        for k in keys:
+            sh = round(base[k] / price[k])
+            line = f"• {KR_ETF[k][1]}: 기본 {sh}주 ({_man(base[k])}) · 신호 {sig.get(k, 0)}개월분"
+            mk = sig.get(k, 0)
+            if mk >= 2:
+                amt = min(base[k] * mk, gap[k])
+                line += f" → 하락 구간 최대 {round(amt / price[k])}주 ({_man(amt)})"
+            lines.append(line)
+        if pulled > monthly * 0.1:
+            lines.append(f"앞당겨 쓴 금액: {_man(pulled)} (그만큼 이후 정기 매수 쉬기)")
+        limit = float(cfg.get("irp_total", 50000000)) * 0.7
+        if Vt > limit * 0.95:
+            lines.append(f"⚠ 위험자산 {_man(Vt)} / 한도 {_man(limit)} (70%)에 근접")
+        lines.append("<i>매수 후 update_irp.ps1 로 보유 수량·남은 투자금 업데이트</i>")
+        return "\n".join(lines)
+    except Exception as e:  # noqa: BLE001
+        return f"💼 내 IRP: 계산 실패 ({_html.escape(type(e).__name__)})"
+
+
 def telegram_message(results: list) -> str:
     r0 = max((r for _, r, _ in results), key=lambda r: r["date"])
     head = (f"🧭 <b>투자온도계</b> {r0['date']} 종가\n"
@@ -428,7 +513,9 @@ def telegram_message(results: list) -> str:
     else:
         head += f"✅ 데이터 확인: 모두 {r0['date']} 값\n"
     latest = max(r["date"] for _, r, _ in results)
-    return head + "\n" + "\n\n".join(index_block(ix, r, full, latest) for ix, r, full in results)
+    body = "\n\n".join(index_block(ix, r, full, latest) for ix, r, full in results)
+    irp = irp_section(results)
+    return head + "\n" + body + (f"\n\n{irp}" if irp else "")
 
 
 def _post_telegram(text: str) -> None:

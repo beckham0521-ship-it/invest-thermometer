@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 _site/
 .alert_sent
+irp_local.json
