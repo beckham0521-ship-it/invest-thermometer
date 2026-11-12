@@ -231,7 +231,7 @@
       <div class="scale">
         <div class="scale-bar" id="scalebar"></div>
         <div class="scale-ticks"><span style="left:0">0</span><span style="left:20%">20 ↓ 하늘색</span><span style="left:50%">50</span><span style="left:75%">75</span><span style="left:100%">100</span></div>
-        <div class="muted" style="margin-top:6px"><span class="star">★</span>적립 조건: Slow %K &lt; __SLOW__ · RSI 일간 30~40 · 공포탐욕 &lt; 20 &nbsp;|&nbsp; <span class="star">★</span>하락장 신호: RSI 주간 ≤ 40</div>
+        <div class="muted" style="margin-top:6px"><span class="star">★</span>적립 조건: Slow %K &lt; __SLOW__ · RSI 일간 30~40 · 공포탐욕 &lt; __FG__ &nbsp;|&nbsp; <span class="star">★</span>하락장 신호: RSI 주간 ≤ 40</div>
         <div class="muted" style="margin-top:4px"><span class="pts on" style="font-size:11px">+N점</span> 피라미딩 매수 점수 (점수 기준은 위 "점수 기준표 보기")</div>
       </div>
     </div>
@@ -301,7 +301,7 @@ const tchip = v => { const c = tempColor(v); return `<span class="chip" style="b
 const chip = (v, d=1) => { const c = colorFor(v); return `<span class="chip" style="background:${c.bg};color:${c.fg}">${fmt(v,d)}</span>`; };
 /* 별표 조건 */
 const STAR = {
-  fear_greed: v => v < 20,
+  fear_greed: v => v < CFG.fg,
   rsi_weekly: v => v <= 40,
   rsi_daily:  v => v >= 30 && v <= 40,
   slow_k:     v => v < CFG.slow,
@@ -512,15 +512,15 @@ function drawMonthly() {
   });
   document.getElementById('montable').innerHTML = head + html;
 }
-function condCount(r) { return (r.slow_k < CFG.slow ? 1 : 0) + (r.rsi_daily >= 30 && r.rsi_daily <= 40 ? 1 : 0) + (r.fear_greed != null && r.fear_greed < 20 ? 1 : 0); }
+function condCount(r) { return (r.slow_k < CFG.slow ? 1 : 0) + (r.rsi_daily >= 30 && r.rsi_daily <= 40 ? 1 : 0) + (r.fear_greed != null && r.fear_greed < CFG.fg ? 1 : 0); }
 function starStr(n) { return '★'.repeat(n) + '☆'.repeat(3 - n); }
 function drawSignals() {
   const r = last, n = condCount(r), m = n0(r.buy_months);
   const cards = [];
   // 1. 적립
-  const met = [r.slow_k < CFG.slow ? 'Slow' : null, (r.rsi_daily >= 30 && r.rsi_daily <= 40) ? 'RSI 일간' : null, (r.fear_greed < 20) ? '공포탐욕' : null].filter(Boolean);
+  const met = [r.slow_k < CFG.slow ? 'Slow' : null, (r.rsi_daily >= 30 && r.rsi_daily <= 40) ? 'RSI 일간' : null, (r.fear_greed < CFG.fg) ? '공포탐욕' : null].filter(Boolean);
   cards.push(n >= 2
-    ? ['good', '정기 적립', `<span class="stars">${starStr(n)}</span> 좋은 날`, `${met.join(' · ')} 충족 (${n}/3)`]
+    ? ['good', '정기 적립', `<span class="stars">${starStr(n)}</span> 좋은 날`, `${met.join(' · ')} 충족 (${n}/3)` + (n === 3 && CFG.triple ? `<br>⚠ ${CFG.triple}` : '')]
     : ['', '정기 적립', `<span class="stars">${starStr(n)}</span> ${n === 1 ? '보통' : '대기'}`, n === 1 ? `${met[0]}만 충족 · 이번 달 2개 이상인 날이 없으면 이런 날 적립` : '충족 조건 없음 · 2개 이상인 날을 기다리기']);
   // 2. 추가 매수
   cards.push(m > 0

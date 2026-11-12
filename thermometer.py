@@ -63,19 +63,20 @@ INDEXES = [
     # slow: 적립 조건 Slow 기준 / wl, wl2: RSI 주간 저점 1·2단계 / wh_stop, wh_trim: RSI 주간 고점(추가 매수 멈춤 / 일부 실현)
     {"key": "ndx", "tab": "QQQ", "name": "나스닥100", "short": "NAS100", "ticker": "^NDX", "etf": "QQQ",
      "full": "history_full.csv", "hist": "history.csv", "page": "index.html",
-     "slow": 20, "wl": 40, "wl2": 35, "wh_stop": 67, "wh_trim": 70,
+     "slow": 20, "fg": 15, "wl": 40, "wl2": 35, "wh_stop": 67, "wh_trim": 70, "triple": "",
      "low1": ["warn", "⚠ 분할 매수", "하락이 길어질 수 있어 3~4주에 나눠서 (검증: 이후 6개월 상승확률 47~60%)"],
      "low2": ["warn", "⚠ 분할 매수 · 비중 확대", "1년 성과는 좋았지만(+6~10%p) 6개월 상승확률은 38~46%라 반드시 나눠서"],
-     "note": "2011~2026 나스닥100 검증: 적립 조건은 Slow<20 · RSI일 30~40 · 공탐<20 (RSI일 범위를 30~50에서 좁혀 세 지수 모두 성과 개선) · 추가 매수 금액은 피라미딩 점수 · RSI 주간 ≤ 40은 하락이 길어질 수 있어 분할 매수 · RSI 주간 ≥ 70부터 이후 3개월 성과가 약해 일부 실현"},
+     "note": "2011~2026 나스닥100 검증: 적립 조건은 Slow<20 · RSI일 30~40 · 공탐<15 (범위를 좁힐수록 ★★ 날 성과 개선) · 추가 매수 금액은 피라미딩 점수 · RSI 주간 ≤ 40은 하락이 길어질 수 있어 분할 매수 · RSI 주간 ≥ 70부터 이후 3개월 성과가 약해 일부 실현"},
     {"key": "sox", "tab": "SOXX", "name": "필라델피아 반도체", "short": "SOX", "ticker": "^SOX", "etf": "SOXX",
      "full": "history_full_sox.csv", "hist": "history_sox.csv", "page": "sox.html",
-     "slow": 10, "wl": 40, "wl2": 35, "wh_stop": 75, "wh_trim": 78,
+     "slow": 10, "fg": 20, "wl": 40, "wl2": 35, "wh_stop": 75, "wh_trim": 78,
+     "triple": "반도체는 ★★★ 날이 급락 한가운데인 경우가 많았음 (이후 1년 평균보다 3~6%p 낮음) → 2~3번 나눠서",
      "low1": ["buy", "적극 매수 구간", "반도체는 RSI 주간 40 이하 이후 반등이 컸음 (검증: 1년 상승확률 92~94%)"],
      "low2": ["buy", "최대 매수 구간", "RSI 주간 35 이하 이후 1년 상승확률 100% (검증: 평균보다 +33~43%p)"],
      "note": "2011~2026 반도체 검증: 변동성이 커서 Slow는 10 미만일 때만 적립 조건으로 인정 · RSI 주간 ≤ 40 적극 매수, ≤ 35 최대 매수 · 상승 추세가 강해 RSI 주간 78 이상에서만 일부 실현"},
     {"key": "spx", "tab": "VOO", "name": "S&P500", "short": "S&P500", "ticker": "^GSPC", "etf": "VOO",
      "full": "history_full_spx.csv", "hist": "history_spx.csv", "page": "spx.html",
-     "slow": 20, "wl": 40, "wl2": 35, "wh_stop": 67, "wh_trim": 70,
+     "slow": 20, "fg": 15, "wl": 40, "wl2": 35, "wh_stop": 67, "wh_trim": 70, "triple": "",
      "low1": ["buy", "적극 매수 구간", "S&P500은 RSI 주간 40 이하 이후 성과가 좋았음 (검증: 1년 상승확률 87~93%)"],
      "low2": ["buy", "최대 매수 구간", "RSI 주간 35 이하 이후 1년 상승확률 100% (검증: 평균보다 +15~17%p)"],
      "note": "2011~2026 S&P500 검증: 적립 조건은 현재 기준 유지 · RSI 주간 ≤ 40 적극 매수, ≤ 35 최대 매수 · RSI 주간 ≥ 70 이후 1년 성과가 평균보다 5~9%p 낮아 세 지수 중 수익 실현 신호가 가장 잘 맞음"},
@@ -346,7 +347,7 @@ def render_page(ix: dict, hist: pd.DataFrame, monthly: pd.DataFrame, full: pd.Da
 
     tabs = "".join(
         f'<a href="{o["page"]}" class="{"on" if o["key"] == ix["key"] else ""}">{o["tab"]}</a>' for o in INDEXES)
-    cfg = {k: ix[k] for k in ("slow", "wl", "wl2", "wh_stop", "wh_trim", "low1", "low2", "note")}
+    cfg = {k: ix[k] for k in ("slow", "fg", "triple", "wl", "wl2", "wh_stop", "wh_trim", "low1", "low2", "note")}
     cfg["warn"] = WARNINGS
     cfg["data_date"] = str(full["date"].max())
     html = (TEMPLATE.read_text(encoding="utf-8-sig")
@@ -356,7 +357,7 @@ def render_page(ix: dict, hist: pd.DataFrame, monthly: pd.DataFrame, full: pd.Da
             .replace("/*__CFG__*/{}", json.dumps(cfg, ensure_ascii=False))
             .replace("<!--__TABS__-->", tabs)
             .replace("__INDEX_NAME__", ix["name"]).replace("__INDEX_SHORT__", ix["short"])
-            .replace("__ETF__", ix["etf"]).replace("__SLOW__", str(ix["slow"])))
+            .replace("__ETF__", ix["etf"]).replace("__SLOW__", str(ix["slow"])).replace("__FG__", str(ix["fg"])))
     SITE.mkdir(exist_ok=True)
     (SITE / ix["page"]).write_text(html, encoding="utf-8")
 
@@ -371,12 +372,14 @@ def index_block(ix: dict, r: pd.Series, full: pd.DataFrame, latest: str | None =
         met.append("Slow")
     if 30 <= r["rsi_daily"] <= 40:
         met.append("RSI일")
-    if pd.notna(r["fear_greed"]) and r["fear_greed"] < 20:
+    if pd.notna(r["fear_greed"]) and r["fear_greed"] < ix["fg"]:
         met.append("공탐")
     n = len(met)
     stars = "★" * n + "☆" * (3 - n)
     dca = (f"{stars} 좋은 날 → 적립 매수 ({' · '.join(met)})" if n >= 2
            else f"{stars} 보통 ({met[0]}만 충족)" if n == 1 else f"{stars} 대기")
+    if n == 3 and ix.get("triple"):
+        dca += f"\n  ⚠ {ix['triple']}"
     months, score = int(r["buy_months"]), int(r["buy_score"])
     add = f"{months}개월분 ({score}점 · {r['buy_zone']})" if months else f"없음 ({score}점)"
     rw = r["rsi_weekly"]
