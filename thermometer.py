@@ -27,13 +27,19 @@
                      - 지난달, 지지난달  : 매주 토요일 아침에 얻은 값 (= 그 주 마지막 거래일, 보통 금요일 종가)
                      - 그 이전          : 월마다 피라미딩 점수가 가장 높은 하루 (같으면 하락률이 가장 큰 날)
 
+지수 (INDEXES)
+  ndx 나스닥100 ^NDX (QQQ) / sox 반도체 ^SOX (SOXX) / spx S&P500 ^GSPC (VOO)  — 탭·메시지 순서
+  공포탐욕·VIX는 시장 전체 지표라 세 지수 공통. 같은 점수 기준을 쓰며 2011~ 검증으로 확인.
+  결과 페이지: site/index.html, site/sox.html, site/spx.html (GitHub Pages로 그대로 배포)
+
 사용법
-  python thermometer.py                     # 마지막 기록 이후 빠진 날 + 오늘 채우기
+  python thermometer.py                     # 마지막 기록 이후 빠진 날 + 오늘 채우기 (새 지수는 2026-01-01부터)
   python thermometer.py --since 2026-01-01  # 지정 날짜부터 다시 채우기
 """
 from __future__ import annotations
 
 import argparse
+import html as _html
 import json
 import os
 import sys
@@ -48,8 +54,31 @@ BASE = Path(__file__).resolve().parent
 FULL = BASE / "history_full.csv"
 HISTORY = BASE / "history.csv"
 TEMPLATE = BASE / "template.html"
-DASHBOARD = BASE / "dashboard.html"
-TICKER = "^NDX"
+SITE = BASE / "site"
+BACKFILL_START = "2026-01-01"
+PAGE_URL = "https://beckham0521-ship-it.github.io/invest-thermometer/"
+
+INDEXES = [
+    # slow: 적립 조건 Slow 기준 / wl, wl2: RSI 주간 저점 1·2단계 / wh_stop, wh_trim: RSI 주간 고점(추가 매수 멈춤 / 일부 실현)
+    {"key": "ndx", "tab": "QQQ", "name": "나스닥100", "short": "NAS100", "ticker": "^NDX", "etf": "QQQ",
+     "full": "history_full.csv", "hist": "history.csv", "page": "index.html",
+     "slow": 20, "wl": 40, "wl2": 35, "wh_stop": 67, "wh_trim": 70,
+     "low1": ["warn", "⚠ 분할 매수", "하락이 길어질 수 있어 3~4주에 나눠서 (검증: 이후 6개월 상승확률 47~60%)"],
+     "low2": ["warn", "⚠ 분할 매수 · 비중 확대", "1년 성과는 좋았지만(+6~10%p) 6개월 상승확률은 38~46%라 반드시 나눠서"],
+     "note": "2011~2026 나스닥100 검증: 적립 조건은 현재 기준(Slow<20 · RSI일 30~50 · 공탐<20)이 가장 안정적 · 추가 매수 금액은 피라미딩 점수 · RSI 주간 ≤ 40은 하락이 길어질 수 있어 분할 매수 · RSI 주간 ≥ 70부터 이후 3개월 성과가 약해 일부 실현"},
+    {"key": "sox", "tab": "SOXX", "name": "필라델피아 반도체", "short": "SOX", "ticker": "^SOX", "etf": "SOXX",
+     "full": "history_full_sox.csv", "hist": "history_sox.csv", "page": "sox.html",
+     "slow": 10, "wl": 40, "wl2": 35, "wh_stop": 75, "wh_trim": 78,
+     "low1": ["buy", "적극 매수 구간", "반도체는 RSI 주간 40 이하 이후 반등이 컸음 (검증: 1년 상승확률 92~94%)"],
+     "low2": ["buy", "최대 매수 구간", "RSI 주간 35 이하 이후 1년 상승확률 100% (검증: 평균보다 +33~43%p)"],
+     "note": "2011~2026 반도체 검증: 변동성이 커서 Slow는 10 미만일 때만 적립 조건으로 인정 · RSI 주간 ≤ 40 적극 매수, ≤ 35 최대 매수 · 상승 추세가 강해 RSI 주간 78 이상에서만 일부 실현"},
+    {"key": "spx", "tab": "VOO", "name": "S&P500", "short": "S&P500", "ticker": "^GSPC", "etf": "VOO",
+     "full": "history_full_spx.csv", "hist": "history_spx.csv", "page": "spx.html",
+     "slow": 20, "wl": 40, "wl2": 35, "wh_stop": 67, "wh_trim": 70,
+     "low1": ["buy", "적극 매수 구간", "S&P500은 RSI 주간 40 이하 이후 성과가 좋았음 (검증: 1년 상승확률 87~93%)"],
+     "low2": ["buy", "최대 매수 구간", "RSI 주간 35 이하 이후 1년 상승확률 100% (검증: 평균보다 +15~17%p)"],
+     "note": "2011~2026 S&P500 검증: 적립 조건은 현재 기준 유지 · RSI 주간 ≤ 40 적극 매수, ≤ 35 최대 매수 · RSI 주간 ≥ 70 이후 1년 성과가 평균보다 5~9%p 낮아 세 지수 중 수익 실현 신호가 가장 잘 맞음"},
+]
 KST = timezone(timedelta(hours=9))
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 
@@ -76,12 +105,16 @@ def slow_stoch(df: pd.DataFrame, k: int = 14, smooth: int = 3, d: int = 3):
 
 # ---------- 데이터 수집 ----------
 def fetch_ndx() -> pd.DataFrame:
-    df = yf.download(TICKER, period="max", interval="1d", auto_adjust=False, progress=False)
+    return fetch_index("^NDX")
+
+
+def fetch_index(ticker: str) -> pd.DataFrame:
+    df = yf.download(ticker, period="max", interval="1d", auto_adjust=False, progress=False)
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
     df = df.dropna(subset=["Close"])
     if df.empty:
-        raise RuntimeError("나스닥100 데이터를 가져오지 못했습니다.")
+        raise RuntimeError(f"{ticker} 데이터를 가져오지 못했습니다.")
     df.index = pd.to_datetime(df.index).tz_localize(None).normalize()
     return df
 
@@ -257,27 +290,32 @@ def monthly_best(full: pd.DataFrame) -> pd.DataFrame:
     return best.sort_values("date").tail(12)
 
 
-def render_dashboard(hist: pd.DataFrame, monthly: pd.DataFrame, full: pd.DataFrame) -> None:
-    rows = json.loads(hist.to_json(orient="records", force_ascii=False))
-    mon = json.loads(monthly.to_json(orient="records", force_ascii=False))
-    allrows = json.loads(full.drop(columns=["updated_at"], errors="ignore").to_json(orient="records", force_ascii=False))
+def render_page(ix: dict, hist: pd.DataFrame, monthly: pd.DataFrame, full: pd.DataFrame) -> None:
+    def js(df):
+        return json.dumps(json.loads(df.to_json(orient="records", force_ascii=False)), ensure_ascii=False)
+
+    tabs = "".join(
+        f'<a href="{o["page"]}" class="{"on" if o["key"] == ix["key"] else ""}">{o["tab"]}</a>' for o in INDEXES)
+    cfg = {k: ix[k] for k in ("slow", "wl", "wl2", "wh_stop", "wh_trim", "low1", "low2", "note")}
     html = (TEMPLATE.read_text(encoding="utf-8-sig")
-            .replace("/*__DATA__*/[]", json.dumps(rows, ensure_ascii=False))
-            .replace("/*__MONTHLY__*/[]", json.dumps(mon, ensure_ascii=False))
-            .replace("/*__FULL__*/[]", json.dumps(allrows, ensure_ascii=False)))
-    DASHBOARD.write_text(html, encoding="utf-8")
+            .replace("/*__DATA__*/[]", js(hist))
+            .replace("/*__MONTHLY__*/[]", js(monthly))
+            .replace("/*__FULL__*/[]", js(full.drop(columns=["updated_at"], errors="ignore")))
+            .replace("/*__CFG__*/{}", json.dumps(cfg, ensure_ascii=False))
+            .replace("<!--__TABS__-->", tabs)
+            .replace("__INDEX_NAME__", ix["name"]).replace("__INDEX_SHORT__", ix["short"])
+            .replace("__ETF__", ix["etf"]).replace("__SLOW__", str(ix["slow"])))
+    SITE.mkdir(exist_ok=True)
+    (SITE / ix["page"]).write_text(html, encoding="utf-8")
 
 
-PAGE_URL = "https://beckham0521-ship-it.github.io/invest-thermometer/"
+def _f(v, d=1):
+    return "-" if pd.isna(v) else f"{v:.{d}f}"
 
 
-def telegram_message(r: pd.Series, full: pd.DataFrame | None = None) -> str:
-    """대시보드 '오늘의 판단'과 같은 규칙으로 요약 + 이번 달 최고점."""
-    def f(v, d=1):
-        return "-" if pd.isna(v) else f"{v:.{d}f}"
-
+def index_block(ix: dict, r: pd.Series, full: pd.DataFrame) -> str:
     met = []
-    if r["slow_k"] < 20:
+    if r["slow_k"] < ix["slow"]:
         met.append("Slow")
     if 30 <= r["rsi_daily"] <= 50:
         met.append("RSI일")
@@ -285,58 +323,63 @@ def telegram_message(r: pd.Series, full: pd.DataFrame | None = None) -> str:
         met.append("공탐")
     n = len(met)
     stars = "★" * n + "☆" * (3 - n)
-    if n >= 2:
-        dca = f"{stars} 좋은 날 → 이번 달 적립 매수 ({' · '.join(met)})"
-    elif n == 1:
-        dca = f"{stars} 보통 ({met[0]}만 충족)"
-    else:
-        dca = f"{stars} 대기"
-
+    dca = (f"{stars} 좋은 날 → 적립 매수 ({' · '.join(met)})" if n >= 2
+           else f"{stars} 보통 ({met[0]}만 충족)" if n == 1 else f"{stars} 대기")
     months, score = int(r["buy_months"]), int(r["buy_score"])
     add = f"{months}개월분 ({score}점 · {r['buy_zone']})" if months else f"없음 ({score}점)"
-    bear = f"⚠ RSI주 {f(r['rsi_weekly'])} ≤ 40 → 나눠서 매수" if r["rsi_weekly"] <= 40 else "해당 없음"
-    if r["rsi_weekly"] >= 72:
-        sell = f"RSI주 {f(r['rsi_weekly'])} ≥ 72 → 수익 30% 내외 실현 고려"
-    elif r["rsi_weekly"] >= 67:
-        sell = f"RSI주 {f(r['rsi_weekly'])} ≥ 67 → 추가 매수 멈춤"
+    rw = r["rsi_weekly"]
+    if rw <= ix["wl2"]:
+        bear = f"RSI주 {_f(rw)} ≤ {ix['wl2']} → {ix['low2'][1]}"
+    elif rw <= ix["wl"]:
+        bear = f"RSI주 {_f(rw)} ≤ {ix['wl']} → {ix['low1'][1]}"
+    else:
+        bear = "해당 없음"
+    if rw >= ix["wh_trim"]:
+        sell = f"RSI주 {_f(rw)} ≥ {ix['wh_trim']} → 수익 30% 내외 실현 고려"
+    elif rw >= ix["wh_stop"]:
+        sell = f"RSI주 {_f(rw)} ≥ {ix['wh_stop']} → 추가 매수 멈춤"
     else:
         sell = "해당 없음"
-
-    best_line = ""
-    if full is not None:
-        mon = full[full["date"].str[:7] == r["date"][:7]].dropna(subset=["buy_score"])
-        if len(mon):
-            b = mon.sort_values(["buy_score", "drawdown_pct", "date"], ascending=[False, True, True]).iloc[0]
-            dow = "월화수목금토일"[pd.Timestamp(b["date"]).dayofweek]
-            bm = int(b["buy_months"])
-            best_line = (f"• 이번 달 최고점: {b['date'][5:].replace('-', '/')}({dow}) "
-                         f"{int(b['buy_score'])}점 · {f'{bm}개월분' if bm else '추가 매수 없음'}\n")
-
+    best = ""
+    mon = full[full["date"].str[:7] == r["date"][:7]].dropna(subset=["buy_score"])
+    if len(mon):
+        b = mon.sort_values(["buy_score", "drawdown_pct", "date"], ascending=[False, True, True]).iloc[0]
+        dow = "월화수목금토일"[pd.Timestamp(b["date"]).dayofweek]
+        bm = int(b["buy_months"])
+        best = (f"• 이번 달 최고점: {b['date'][5:].replace('-', '/')}({dow}) "
+                f"{int(b['buy_score'])}점 · {f'{bm}개월분' if bm else '추가 매수 없음'}\n")
+    ma = r["ma_level"] if isinstance(r["ma_level"], str) else "도달 없음"
+    name, etf, short = (_html.escape(ix[k]) for k in ("name", "etf", "short"))  # S&P 의 & 처리
     return (
-        f"🧭 <b>투자온도계</b> {r['date']} 종가\n\n"
+        f"<b>📈 {name}</b> ({etf})\n"
         f"• 정기 적립: {dca}\n"
         f"• 추가 매수: <b>{add}</b>\n"
         f"• 하락장: {bear}\n"
         f"• 수익 실현: {sell}\n"
-        f"{best_line}\n"
-        f"NAS100 {r['nas100_close']:,.0f} ({r['drawdown_pct']:+.1f}%)\n"
-        f"VIX {f(r['vix'])}\n"
-        f"RSI 일 {f(r['rsi_daily'])} / 주 {f(r['rsi_weekly'])}\n"
-        f"Slow {f(r['slow_k'])}\n"
-        f"공탐 {f(r['fear_greed'])}\n"
-        f"이평선 {r['ma_level'] if isinstance(r['ma_level'], str) else '도달 없음'}\n\n"
-        f'<a href="{PAGE_URL}">대시보드 열기</a>'
+        f"{best}"
+        f"{short} {r['nas100_close']:,.0f} ({r['drawdown_pct']:+.1f}%)\n"
+        f"RSI 일 {_f(r['rsi_daily'])} / 주 {_f(r['rsi_weekly'])}\n"
+        f"Slow {_f(r['slow_k'])}\n"
+        f"이평선 {ma}\n"
+        f'<a href="{PAGE_URL}{"" if ix["page"] == "index.html" else ix["page"]}">대시보드 열기</a>'
     )
 
 
-def send_telegram(r: pd.Series, full: pd.DataFrame | None = None) -> None:
+def telegram_message(results: list) -> str:
+    r0 = results[0][1]
+    head = (f"🧭 <b>투자온도계</b> {r0['date']} 종가\n"
+            f"공탐 {_f(r0['fear_greed'])} · VIX {_f(r0['vix'])}\n")
+    return head + "\n" + "\n\n".join(index_block(ix, r, full) for ix, r, full in results)
+
+
+def send_telegram(results: list) -> None:
     token, chat = os.environ.get("TELEGRAM_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
     if not token or not chat:
         return  # 설정 안 돼 있으면 조용히 건너뜀 (PC 실행 등)
     try:
         resp = requests.post(
             f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": chat, "text": telegram_message(r, full), "parse_mode": "HTML",
+            json={"chat_id": chat, "text": telegram_message(results), "parse_mode": "HTML",
                   "disable_web_page_preview": True},
             timeout=20,
         )
@@ -353,53 +396,54 @@ def main() -> None:
         pass
     ap = argparse.ArgumentParser()
     ap.add_argument("--since", help="이 날짜부터 다시 채우기 (YYYY-MM-DD)")
+    ap.add_argument("--only", help="이 지수만 (ndx/spx/sox)")
     args = ap.parse_args()
 
-    full = pd.read_csv(FULL) if FULL.exists() else pd.DataFrame()
-    df = fetch_ndx()
+    targets = [ix for ix in INDEXES if not args.only or ix["key"] == args.only]
+    fulls = {ix["key"]: (pd.read_csv(BASE / ix["full"]) if (BASE / ix["full"]).exists() else pd.DataFrame())
+             for ix in INDEXES}
+    starts = {}
+    for ix in targets:
+        f = fulls[ix["key"]]
+        starts[ix["key"]] = (pd.Timestamp(args.since) if args.since
+                             else pd.Timestamp(f["date"].max()) if not f.empty
+                             else pd.Timestamp(BACKFILL_START))
 
-    if args.since:
-        start = pd.Timestamp(args.since)
-    elif not full.empty:
-        start = pd.Timestamp(full["date"].max())  # 마지막 날도 다시 계산(최종값 갱신)
-    else:
-        start = df.index[-1]
-    dates = [d for d in df.index if d >= start]
+    fg = fetch_fear_greed((min(starts.values()) - pd.Timedelta(days=7)).date().isoformat())
+    # 공포탐욕 수집이 실패한 날은 이전에 저장해 둔 값을 유지 (모든 지수 기록에서)
+    for f in fulls.values():
+        if not f.empty:
+            for _, r in f.dropna(subset=["fear_greed"]).iterrows():
+                fg.setdefault(r["date"], (float(r["fear_greed"]), r["fear_greed_rating"]))
+    vix = fetch_vix()
 
-    fg = fetch_fear_greed((start - pd.Timedelta(days=7)).date().isoformat())
-    # 공포탐욕 수집이 실패한 날은 이전에 저장해 둔 값을 유지
-    if not full.empty:
-        for _, r in full.dropna(subset=["fear_greed"]).iterrows():
-            fg.setdefault(r["date"], (float(r["fear_greed"]), r["fear_greed_rating"]))
-    new = pd.DataFrame(build_rows(df, dates, fg, fetch_vix()))
+    results = []
+    for ix in INDEXES:
+        full = fulls[ix["key"]]
+        if ix in targets:
+            df = fetch_index(ix["ticker"])
+            dates = [d for d in df.index if d >= starts[ix["key"]]]
+            new = pd.DataFrame(build_rows(df, dates, fg, vix))
+            if not full.empty:
+                full = full[~full["date"].isin(new["date"])]
+            full = pd.concat([full, new], ignore_index=True).sort_values("date").reset_index(drop=True)
+            full.to_csv(BASE / ix["full"], index=False, encoding="utf-8-sig")
+            print(f" [{ix['name']}] 계산 {len(new)}일 / 원본 {len(full)}일")
+        if full.empty:
+            continue
+        hist = compact(full)
+        hist.to_csv(BASE / ix["hist"], index=False, encoding="utf-8-sig")
+        render_page(ix, hist, monthly_best(full), full)
+        results.append((ix, full.iloc[-1], full))
 
-    if not full.empty:
-        full = full[~full["date"].isin(new["date"])]
-    full = pd.concat([full, new], ignore_index=True).sort_values("date").reset_index(drop=True)
-    full.to_csv(FULL, index=False, encoding="utf-8-sig")
-
-    hist = compact(full)
-    hist.to_csv(HISTORY, index=False, encoding="utf-8-sig")
-    render_dashboard(hist, monthly_best(full), full)
-
-    row = full.iloc[-1]
-    print(f"\n===== 투자온도계  {row['date']} (미국장 종가 기준) =====")
-    print(f" 1. NAS100 종가        : {row['nas100_close']:,.2f}")
-    print(f"    전고점             : {row['ath_close']:,.2f}  ({row['ath_date']})")
-    print(f"    전고점 대비 하락률  : {row['drawdown_pct']:+.2f}%")
-    fg_txt = f"{row['fear_greed']} ({row['fear_greed_rating']})" if pd.notna(row["fear_greed"]) else "수집 실패"
-    print(f" 2. 공포탐욕지수        : {fg_txt}")
-    print(f" 3. RSI(14) 주간       : {row['rsi_weekly']}")
-    print(f" 4. RSI(14) 일간       : {row['rsi_daily']}")
-    print(f" 5. Slow %K(14,3)      : {row['slow_k']}")
-    print("-" * 46)
-    print(f" 🌡  온도 {row['temperature']}°  →  {row['status']}")
-    print(f" 📐 매수 점수 {int(row['buy_score'])}점 ({row['buy_zone']}) → 추가 매수 {int(row['buy_months'])}개월분")
-    print(f"    RSI {row['pts_rsi']} · 스토캐스틱 {row['pts_stoch']} · 공포탐욕 {row['pts_fg']} · "
-          f"이평선 {row['pts_ma']}({row['ma_level'] or '-'}) · VIX {row['pts_vix']} (VIX {row['vix']})")
-    print(f" 이번에 계산한 거래일: {len(new)}일 / 원본 {len(full)}일 / 표시 {len(hist)}개")
-    print(f" 대시보드: {DASHBOARD}\n")
-    send_telegram(row, full)
+    for ix, row, _ in results:
+        print(f"\n===== {ix['name']}  {row['date']} =====")
+        print(f" 종가 {row['nas100_close']:,.2f} ({row['drawdown_pct']:+.2f}%) · 전고점 {row['ath_close']:,.2f} ({row['ath_date']})")
+        print(f" RSI 일 {row['rsi_daily']} / 주 {row['rsi_weekly']} · Slow {row['slow_k']} · 공탐 {row['fear_greed']} · VIX {row['vix']}")
+        print(f" 📐 매수 점수 {int(row['buy_score'])}점 ({row['buy_zone']}) → 추가 매수 {int(row['buy_months'])}개월분"
+              f" · 이평선 {row['ma_level'] or '-'}")
+    print(f"\n 페이지: {SITE}\n")
+    send_telegram(results)
 
 
 if __name__ == "__main__":

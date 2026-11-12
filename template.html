@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>투자온도계</title>
+<title>투자온도계 · __INDEX_SHORT__</title>
 <style>
   :root {
     --page: #f6f6f3; --surface: #fcfcfb; --line: #e4e3de; --grid: #ecebe6;
@@ -96,6 +96,13 @@
     .temp-num { font-size: 46px; }
   }
 
+  /* 탭 */
+  .tabs { display: flex; gap: 6px; margin: -6px 0 16px; overflow-x: auto; }
+  .tabs a { flex: 0 0 auto; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line);
+            color: var(--ink-2); text-decoration: none; font-size: 14px; font-weight: 600; background: var(--surface); }
+  .tabs a.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+  .tabs { scrollbar-width: none; }
+  @media (max-width: 760px) { .tabs a { flex: 1 1 0; text-align: center; padding: 8px 6px; } }
   /* 오늘의 판단 */
   .sig-card { margin-bottom: 16px; }
   .sig-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
@@ -161,13 +168,14 @@
       <h1>🌡 투자온도계</h1>
       <div class="sub" id="sub"></div>
     </div>
-    <div class="muted">미국장 종가 기준 · 나스닥100</div>
+    <div class="muted">미국장 종가 기준 · __INDEX_NAME__ · 매매 __ETF__</div>
   </header>
+  <nav class="tabs"><!--__TABS__--></nav>
 
   <section class="card sig-card">
     <h2>🧭 오늘의 판단</h2>
     <div class="sig-grid" id="signals"></div>
-    <div class="muted" style="margin-top:10px">2011~2026 나스닥100 검증: 적립 조건 2개 이상인 날은 1년 평균 6~7개월에만 나오므로, 없는 달은 1개 충족한 날에 적립 · 추가 매수 금액은 피라미딩 점수 · RSI 주간 ≤ 40은 하락이 길어질 수 있어 분할 매수 · RSI 주간 ≥ 72는 단기 성과가 약해 일부 수익 실현</div>
+    <div class="muted" style="margin-top:10px" id="signote"></div>
   </section>
 
   <section class="card pyr-card">
@@ -207,7 +215,7 @@
           <tr><td>공포 구간</td><td>28 / 29 / 30점</td><td>10 / 11 / 12개월분</td></tr>
         </table>
       </div>
-      <div class="muted" style="margin-top:8px">이동평균선은 종가가 그 선 이하일 때 "도달"로 보고, 도달한 선 중 가장 높은 점수 하나만 더합니다. 지수는 나스닥100 기준입니다.</div>
+      <div class="muted" style="margin-top:8px">이동평균선은 종가가 그 선 이하일 때 "도달"로 보고, 도달한 선 중 가장 높은 점수 하나만 더합니다. 지수는 __INDEX_NAME__ 기준입니다.</div>
     </details>
   </section>
 
@@ -218,7 +226,7 @@
       <div class="scale">
         <div class="scale-bar" id="scalebar"></div>
         <div class="scale-ticks"><span style="left:0">0</span><span style="left:20%">20 ↓ 하늘색</span><span style="left:50%">50</span><span style="left:75%">75</span><span style="left:100%">100</span></div>
-        <div class="muted" style="margin-top:6px"><span class="star">★</span>적립 조건: Slow %K &lt; 20 · RSI 일간 30~50 · 공포탐욕 &lt; 20 &nbsp;|&nbsp; <span class="star">★</span>하락장 신호: RSI 주간 ≤ 40</div>
+        <div class="muted" style="margin-top:6px"><span class="star">★</span>적립 조건: Slow %K &lt; __SLOW__ · RSI 일간 30~50 · 공포탐욕 &lt; 20 &nbsp;|&nbsp; <span class="star">★</span>하락장 신호: RSI 주간 ≤ 40</div>
         <div class="muted" style="margin-top:4px"><span class="pts on" style="font-size:11px">+N점</span> 피라미딩 매수 점수 (점수 기준은 위 "점수 기준표 보기")</div>
       </div>
     </div>
@@ -226,8 +234,8 @@
 
   <section class="card chart-card" id="chartcard">
     <h2>피라미딩 점수 추이</h2>
-    <div class="muted" style="margin:-8px 0 10px">위: 나스닥100 종가 · 아래: 매일의 매수 점수 (막대 색 = 시장 구간)</div>
-    <svg id="chart" width="100%" height="330" role="img" aria-label="나스닥100 종가와 피라미딩 점수 추이"></svg>
+    <div class="muted" style="margin:-8px 0 10px">위: __INDEX_NAME__ 종가 · 아래: 매일의 매수 점수 (막대 색 = 시장 구간)</div>
+    <svg id="chart" width="100%" height="330" role="img" aria-label="__INDEX_NAME__ 종가와 피라미딩 점수 추이"></svg>
     <div class="legend" style="margin-top:6px">
       <span><i style="background:var(--z1)"></i>흔한 조정 1~9점</span>
       <span><i style="background:var(--z2)"></i>깊은 조정 10~24점</span>
@@ -251,6 +259,7 @@
 
 <script>
 const DATA = /*__DATA__*/[];
+const CFG = /*__CFG__*/{};
 const FULL = /*__FULL__*/[];
 const KIND = { daily: '일간', weekly: '주간(금)', monthly_min: '월 최고점' };
 
@@ -290,7 +299,7 @@ const STAR = {
   fear_greed: v => v < 20,
   rsi_weekly: v => v <= 40,
   rsi_daily:  v => v >= 30 && v <= 50,
-  slow_k:     v => v < 20,
+  slow_k:     v => v < CFG.slow,
 };
 const starOf = (r, key) => r[key] != null && !isNaN(r[key]) && STAR[key](r[key]);
 const schip = (r, key) => (starOf(r, key) ? '<span class="star" title="조건 충족">★</span>' : '') + chip(r[key]);
@@ -309,7 +318,7 @@ if (!last) {
   const MA_K = { '60일선':'ma60d','120일선':'ma120d','200일선':'ma200d','60주선':'ma60w','120주선':'ma120w','200주선':'ma200w' };
   const tiles = [
     ['피라미딩 총점', `<span>${Math.round(last.buy_score||0)}<span class="muted" style="font-size:13px"> / 30점</span></span>` + sub(`${last.buy_zone} · ${Math.round(last.buy_months||0)}개월분`)],
-    ['NAS100 종가', `<span>${Number(last.nas100_close).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`],
+    ['__INDEX_SHORT__ 종가', `<span>${Number(last.nas100_close).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`],
     ['전고점', `<span>${Number(last.ath_close).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>` + sub(last.ath_date)],
     ['전고점 대비 하락률', `<span>${fmtDD(last.drawdown_pct)}</span>`],
     ['RSI(14) 주간', schip(last, 'rsi_weekly')],
@@ -353,7 +362,7 @@ function drawChart() {
     g += `<text x="${m.l - 8}" y="${y + 4}" text-anchor="end">${(v / 1000).toFixed(1)}k</text>`;
   }
   g += `<polyline fill="none" stroke="var(--ink-2)" stroke-width="2" stroke-linejoin="round" points="${D.map((r, i) => `${x(i)},${yp(r.nas100_close)}`).join(' ')}"/>`;
-  g += `<text x="${m.l}" y="${P.t + 4}" style="font-size:11px;fill:var(--ink-2)">나스닥100</text>`;
+  g += `<text x="${m.l}" y="${P.t + 4}" style="font-size:11px;fill:var(--ink-2)">__INDEX_NAME__</text>`;
   // 점수 칸
   [0, 10, 20, 30].filter(v => v <= SMAX).forEach(v => {
     g += `<line x1="${m.l}" x2="${W - m.r}" y1="${ys(v)}" y2="${ys(v)}" stroke="var(--grid)"/>`;
@@ -386,7 +395,7 @@ function drawChart() {
     const r = D[i], px = x(i), mo = n0(r.buy_months);
     cross.setAttribute('x1', px); cross.setAttribute('x2', px); cross.setAttribute('opacity', 1);
     tip.innerHTML = `${dayLabel(r.date)} · ${r.date.slice(0, 4)}<br><b>${n0(r.buy_score)}점</b> ${mo ? '· 추가 매수 ' + mo + '개월분' : '· 추가 매수 없음'}<br>
-      <span class="muted">나스닥100 ${Number(r.nas100_close).toLocaleString('en-US', {maximumFractionDigits: 0})} · ${fmtDD(r.drawdown_pct)} · ${r.ma_level || '이평선 도달 없음'}</span>`;
+      <span class="muted">__INDEX_SHORT__ ${Number(r.nas100_close).toLocaleString('en-US', {maximumFractionDigits: 0})} · ${fmtDD(r.drawdown_pct)} · ${r.ma_level || '이평선 도달 없음'}</span>`;
     const cr = card.getBoundingClientRect(), sr = svg.getBoundingClientRect(), tw = tip.offsetWidth;
     tip.style.left = Math.max(8, Math.min(cr.width - tw - 8, sr.left - cr.left + px - tw / 2)) + 'px';
     tip.style.top = (sr.top - cr.top + yp(r.nas100_close) - tip.offsetHeight - 14) + 'px';
@@ -415,7 +424,7 @@ function bindToggle(tableId) {
 }
 /* ---------- 표 ---------- */
 function drawTable() {
-  const head = `<tr><th>날짜</th><th>구분</th><th>매수점수</th><th>적립 조건</th><th>NAS100</th><th>전고점</th><th>전고점 대비</th><th>공포탐욕</th><th>RSI 주간</th><th>RSI 일간</th><th>Slow %K</th></tr>`;
+  const head = `<tr><th>날짜</th><th>구분</th><th>매수점수</th><th>적립 조건</th><th>__INDEX_SHORT__</th><th>전고점</th><th>전고점 대비</th><th>공포탐욕</th><th>RSI 주간</th><th>RSI 일간</th><th>Slow %K</th></tr>`;
   const cells = r => `
       <td>${r.buy_score == null ? '–' : '<b>' + Math.round(r.buy_score) + '</b>점'}</td>
       <td><span class="star" style="margin:0">${starStr(condCount(r))}</span></td>
@@ -498,13 +507,13 @@ function drawMonthly() {
   });
   document.getElementById('montable').innerHTML = head + html;
 }
-function condCount(r) { return (r.slow_k < 20 ? 1 : 0) + (r.rsi_daily >= 30 && r.rsi_daily <= 50 ? 1 : 0) + (r.fear_greed != null && r.fear_greed < 20 ? 1 : 0); }
+function condCount(r) { return (r.slow_k < CFG.slow ? 1 : 0) + (r.rsi_daily >= 30 && r.rsi_daily <= 50 ? 1 : 0) + (r.fear_greed != null && r.fear_greed < 20 ? 1 : 0); }
 function starStr(n) { return '★'.repeat(n) + '☆'.repeat(3 - n); }
 function drawSignals() {
   const r = last, n = condCount(r), m = n0(r.buy_months);
   const cards = [];
   // 1. 적립
-  const met = [r.slow_k < 20 ? 'Slow' : null, (r.rsi_daily >= 30 && r.rsi_daily <= 50) ? 'RSI 일간' : null, (r.fear_greed < 20) ? '공포탐욕' : null].filter(Boolean);
+  const met = [r.slow_k < CFG.slow ? 'Slow' : null, (r.rsi_daily >= 30 && r.rsi_daily <= 50) ? 'RSI 일간' : null, (r.fear_greed < 20) ? '공포탐욕' : null].filter(Boolean);
   cards.push(n >= 2
     ? ['good', '정기 적립', `<span class="stars">${starStr(n)}</span> 좋은 날`, `${met.join(' · ')} 충족 (${n}/3)`]
     : ['', '정기 적립', `<span class="stars">${starStr(n)}</span> ${n === 1 ? '보통' : '대기'}`, n === 1 ? `${met[0]}만 충족 · 이번 달 2개 이상인 날이 없으면 이런 날 적립` : '충족 조건 없음 · 2개 이상인 날을 기다리기']);
@@ -513,16 +522,19 @@ function drawSignals() {
     ? ['buy', '추가 매수', `${m}개월분`, `피라미딩 ${n0(r.buy_score)}점 · ${r.buy_zone}`]
     : ['', '추가 매수', '없음', `피라미딩 0점`]);
   // 3. 하락장
-  cards.push(r.rsi_weekly <= 40
-    ? ['warn', '하락장 신호', '⚠ 분할 매수', `RSI 주간 ${fmt(r.rsi_weekly)} ≤ 40 · 하락이 길어질 수 있어 한 번에 사지 말고 나눠서`]
-    : ['', '하락장 신호', '해당 없음', `RSI 주간 ${fmt(r.rsi_weekly)} (40 이하일 때 표시)`]);
+  cards.push(r.rsi_weekly <= CFG.wl2
+    ? [CFG.low2[0], '하락장 신호', CFG.low2[1], `RSI 주간 ${fmt(r.rsi_weekly)} ≤ ${CFG.wl2} · ${CFG.low2[2]}`]
+    : r.rsi_weekly <= CFG.wl
+    ? [CFG.low1[0], '하락장 신호', CFG.low1[1], `RSI 주간 ${fmt(r.rsi_weekly)} ≤ ${CFG.wl} · ${CFG.low1[2]}`]
+    : ['', '하락장 신호', '해당 없음', `RSI 주간 ${fmt(r.rsi_weekly)} (${CFG.wl} 이하일 때 표시)`]);
   // 4. 수익 실현
-  if (r.rsi_weekly >= 72) cards.push(['sell', '수익 실현', '30% 내외 실현 고려', `RSI 주간 ${fmt(r.rsi_weekly)} ≥ 72 · 이후 3개월 성과가 약했던 구간`]);
-  else if (r.rsi_weekly >= 67) cards.push(['sell', '수익 실현', '일부 실현 고려', `RSI 주간 ${fmt(r.rsi_weekly)} ≥ 67`]);
-  else cards.push(['', '수익 실현', '해당 없음', `RSI 주간 ${fmt(r.rsi_weekly)} (67 이상일 때 표시)`]);
+  if (r.rsi_weekly >= CFG.wh_trim) cards.push(['sell', '수익 실현', '30% 내외 실현 고려', `RSI 주간 ${fmt(r.rsi_weekly)} ≥ ${CFG.wh_trim} · 이후 3개월 성과가 약했던 구간`]);
+  else if (r.rsi_weekly >= CFG.wh_stop) cards.push(['sell', '수익 실현', '추가 매수 멈춤', `RSI 주간 ${fmt(r.rsi_weekly)} ≥ ${CFG.wh_stop} · 정기 적립은 계속`]);
+  else cards.push(['', '수익 실현', '해당 없음', `RSI 주간 ${fmt(r.rsi_weekly)} (${CFG.wh_stop} 이상일 때 표시)`]);
   document.getElementById('signals').innerHTML = cards.map(([cls, k, v, d]) =>
     `<div class="sig ${cls ? 'on ' + cls : ''}"><div class="k">${k}</div><div class="v">${v}</div><div class="d">${d}</div></div>`).join('');
 }
+document.getElementById('signote').textContent = CFG.note || '';
 if (last) { drawSignals(); drawPyramid(); drawChart(); drawMonthly(); drawTable(); bindToggle('table'); bindToggle('montable'); }
 let rz, lastW = 0;
 new ResizeObserver(() => {

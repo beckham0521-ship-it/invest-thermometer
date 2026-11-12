@@ -41,16 +41,13 @@ jobs:
         run: |
           git config user.name "thermometer-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add history_full.csv history.csv dashboard.html
+          git add history_full*.csv history*.csv site
           git diff --cached --quiet || git commit -m "update $(date -u +%F)"
           git push
-
-      - name: 페이지 준비
-        run: mkdir -p _site && cp dashboard.html _site/index.html
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: _site
+          path: site
       - id: deploy
         uses: actions/deploy-pages@v4

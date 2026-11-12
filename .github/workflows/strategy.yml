@@ -1,0 +1,19 @@
+name: 전략 메시지 보내기
+
+on:
+  workflow_dispatch: {}   # Actions 탭에서 수동 실행
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - name: 텔레그램으로 전략 보내기
+        run: python send_message.py strategy_message.txt
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
