@@ -308,8 +308,11 @@ def telegram_message(r: pd.Series) -> str:
         f"• 추가 매수: <b>{add}</b>\n"
         f"• 하락장: {bear}\n"
         f"• 수익 실현: {sell}\n\n"
-        f"NAS100 {r['nas100_close']:,.0f} ({r['drawdown_pct']:+.1f}%) · VIX {f(r['vix'])}\n"
-        f"RSI 일 {f(r['rsi_daily'])} / 주 {f(r['rsi_weekly'])} · Slow {f(r['slow_k'])} · 공탐 {f(r['fear_greed'])}\n"
+        f"NAS100 {r['nas100_close']:,.0f} ({r['drawdown_pct']:+.1f}%)\n"
+        f"VIX {f(r['vix'])}\n"
+        f"RSI 일 {f(r['rsi_daily'])} / 주 {f(r['rsi_weekly'])}\n"
+        f"Slow {f(r['slow_k'])}\n"
+        f"공탐 {f(r['fear_greed'])}\n"
         f"이평선 {r['ma_level'] if isinstance(r['ma_level'], str) else '도달 없음'}\n\n"
         f'<a href="{PAGE_URL}">대시보드 열기</a>'
     )
