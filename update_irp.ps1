@@ -21,6 +21,7 @@ $c.remaining    = Ask "남은 투자금(원, 3000만 원까지 남은 금액)" $
 
 $json = $c | ConvertTo-Json -Compress -Depth 5
 [IO.File]::WriteAllText($file, $json, (New-Object Text.UTF8Encoding $false))
+$OutputEncoding = New-Object Text.UTF8Encoding $false   # BOM 없이 보내기
 $json | & $gh secret set IRP_CONFIG --repo $repo
 Write-Host "저장 완료: 나스닥100 $($c.holdings.ndx)주 / 반도체 $($c.holdings.sox)주 / S&P500 $($c.holdings.spx)주 / 남은 투자금 $($c.remaining)원" -ForegroundColor Green
 

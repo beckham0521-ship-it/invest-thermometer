@@ -66,7 +66,7 @@ INDEXES = [
      "slow": 20, "wl": 40, "wl2": 35, "wh_stop": 67, "wh_trim": 70,
      "low1": ["warn", "⚠ 분할 매수", "하락이 길어질 수 있어 3~4주에 나눠서 (검증: 이후 6개월 상승확률 47~60%)"],
      "low2": ["warn", "⚠ 분할 매수 · 비중 확대", "1년 성과는 좋았지만(+6~10%p) 6개월 상승확률은 38~46%라 반드시 나눠서"],
-     "note": "2011~2026 나스닥100 검증: 적립 조건은 현재 기준(Slow<20 · RSI일 30~50 · 공탐<20)이 가장 안정적 · 추가 매수 금액은 피라미딩 점수 · RSI 주간 ≤ 40은 하락이 길어질 수 있어 분할 매수 · RSI 주간 ≥ 70부터 이후 3개월 성과가 약해 일부 실현"},
+     "note": "2011~2026 나스닥100 검증: 적립 조건은 Slow<20 · RSI일 30~40 · 공탐<20 (RSI일 범위를 30~50에서 좁혀 세 지수 모두 성과 개선) · 추가 매수 금액은 피라미딩 점수 · RSI 주간 ≤ 40은 하락이 길어질 수 있어 분할 매수 · RSI 주간 ≥ 70부터 이후 3개월 성과가 약해 일부 실현"},
     {"key": "sox", "tab": "SOXX", "name": "필라델피아 반도체", "short": "SOX", "ticker": "^SOX", "etf": "SOXX",
      "full": "history_full_sox.csv", "hist": "history_sox.csv", "page": "sox.html",
      "slow": 10, "wl": 40, "wl2": 35, "wh_stop": 75, "wh_trim": 78,
@@ -369,7 +369,7 @@ def index_block(ix: dict, r: pd.Series, full: pd.DataFrame, latest: str | None =
     met = []
     if r["slow_k"] < ix["slow"]:
         met.append("Slow")
-    if 30 <= r["rsi_daily"] <= 50:
+    if 30 <= r["rsi_daily"] <= 40:
         met.append("RSI일")
     if pd.notna(r["fear_greed"]) and r["fear_greed"] < 20:
         met.append("공탐")
@@ -448,7 +448,7 @@ def irp_section(results: list) -> str:
     if not raw:
         return ""
     try:
-        cfg = json.loads(raw)
+        cfg = json.loads(raw.lstrip("\ufeff").strip())  # PowerShell이 붙이는 BOM 제거
         hold, w = cfg["holdings"], cfg["weights"]
         R, monthly = float(cfg["remaining"]), float(cfg.get("monthly", 750000))
         sig = {ix["key"]: int(r["buy_months"]) for ix, r, _ in results}
@@ -480,11 +480,27 @@ def irp_section(results: list) -> str:
         gap = {k: gap[k] * R / g for k in keys}
         base = {k: (gap[k] / M if M > 0 else 0.0) for k in keys}
 
+        # 우선 매수 모드: 지정한 ETF가 목표 비중이 될 때까지 월 적립액을 그 ETF에 먼저
+        prio, prio_line = cfg.get("priority"), ""
+        if prio in keys and M > 0:
+            need = max(0.0, (w[prio] * Vt - V[prio]) / (1 - w[prio]))  # 신규 자금만으로 목표 비중까지
+            if need > monthly * 0.05:
+                bp = min(monthly, need)
+                rest = monthly - bp
+                others = [k for k in keys if k != prio]
+                og = sum(gap[k] for k in others) or 1.0
+                base = {k: (bp if k == prio else rest * gap[k] / og) for k in keys}
+                gap[prio] = need
+                prio_line = (f"{KR_ETF[prio][1]} 우선: 비중 {100 * V[prio] / Vt:.0f}% → {100 * w[prio]:.0f}%까지 "
+                             f"{_man(need)} (약 {need / monthly:.1f}개월), 그동안 나머지는 쉬기")
+
         lines = [f"💼 <b>내 IRP</b> ({pdate} 국내 종가)",
                  f"평가 {_man(Vt)} · 남은 투자금 {_man(R)} · 남은 {M}개월",
                  "비중 " + " / ".join(f"{100 * V[k] / Vt:.0f}" for k in keys) + "% → 목표 "
                  + " / ".join(f"{100 * w[k]:.0f}" for k in keys) + "%",
                  "이번 달 정기 매수: 완료 ✅ (아래는 다음 달 기준)" if done else "이번 달 정기 매수: <b>아직</b>"]
+        if prio_line:
+            lines.append(prio_line)
         for k in keys:
             sh = round(base[k] / price[k])
             line = f"• {KR_ETF[k][1]}: 기본 {sh}주 ({_man(base[k])}) · 신호 {sig.get(k, 0)}개월분"
