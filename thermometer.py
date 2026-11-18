@@ -635,7 +635,8 @@ def irp_section(results: list) -> tuple[str, dict]:
 
 def telegram_message(results: list) -> str:
     r0 = max((r for _, r, _ in results), key=lambda r: r["date"])
-    head = (f"🧭 <b>투자온도계</b> {r0['date']} 종가\n"
+    head = ("📌 <b>금요일 종가 기준 다시 보내기</b> (주말 동안 새 데이터 없음)\n" if _today_kst().weekday() == 0 else "")
+    head += (f"🧭 <b>투자온도계</b> {r0['date']} 종가\n"
             f"공탐 {_f(r0['fear_greed'])} · VIX {_f(r0['vix'])} (점수 ≥30/40/50)\n")
     if WARNINGS:
         head += "\n⚠ <b>확인 필요</b>\n" + "".join(f"• {_html.escape(w)}\n" for w in WARNINGS)
