@@ -2,8 +2,11 @@ name: 투자온도계 업데이트
 
 on:
   schedule:
-    # 23:00 UTC 월~금 = 한국시간 화~토 08:00 (미국장 마감 후)
-    - cron: "0 23 * * 1-5"
+    # 한국시간 화~토. GitHub 예약 실행은 가끔 빠지므로 예비 실행을 두고, 이미 보낸 날은 건너뜀
+    # (정각은 전 세계 예약이 몰려 누락이 잦아 몇 분 비켜서 설정)
+    - cron: "7 23 * * 1-5"    # 08:07 KST (기본)
+    - cron: "37 23 * * 1-5"   # 08:37 KST (예비 1)
+    - cron: "17 1 * * 2-6"    # 10:17 KST (예비 2)
   workflow_dispatch: {}   # 수동 실행 버튼
 
 permissions:
@@ -24,14 +27,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: 오늘 이미 보냈는지 확인 (예약 실행만)
+        id: chk
+        run: |
+          today=$(TZ=Asia/Seoul date +%F)
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$(cat last_sent.txt 2>/dev/null)" = "$today" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "오늘($today) 이미 보냄 → 건너뜀"
+          fi
+
       - uses: actions/setup-python@v5
+        if: steps.chk.outputs.skip != 'true'
         with:
           python-version: "3.12"
           cache: pip
 
       - run: pip install -r requirements.txt
+        if: steps.chk.outputs.skip != 'true'
 
       - name: 지표 계산 및 대시보드 생성
+        if: steps.chk.outputs.skip != 'true'
         run: python thermometer.py
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
@@ -39,18 +54,22 @@ jobs:
           IRP_CONFIG: ${{ secrets.IRP_CONFIG }}
 
       - name: 기록 저장 (커밋)
+        if: steps.chk.outputs.skip != 'true'
         run: |
           git config user.name "thermometer-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add history_full*.csv history*.csv site
+          git add history_full*.csv history*.csv site last_sent.txt
           git diff --cached --quiet || git commit -m "update $(date -u +%F)"
           git push
 
       - uses: actions/configure-pages@v5
+        if: steps.chk.outputs.skip != 'true'
       - uses: actions/upload-pages-artifact@v3
+        if: steps.chk.outputs.skip != 'true'
         with:
           path: site
       - id: deploy
+        if: steps.chk.outputs.skip != 'true'
         uses: actions/deploy-pages@v4
 
       - name: 실패 알림 (파이썬이 못 보낸 경우)

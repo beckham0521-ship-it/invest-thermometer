@@ -681,6 +681,7 @@ def send_telegram(results: list) -> None:
             timeout=20,
         )
         resp.raise_for_status()
+        (BASE / "last_sent.txt").write_text(datetime.now(KST).date().isoformat())  # 예비 실행 중복 방지
         print(" 텔레그램 전송 완료")
     except Exception as e:  # noqa: BLE001
         print(f"[경고] 텔레그램 전송 실패: {type(e).__name__}", file=sys.stderr)
