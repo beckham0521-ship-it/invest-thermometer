@@ -190,9 +190,11 @@ def fetch_fear_greed_backup() -> dict[str, tuple[float, str]]:
 
 
 def latest_us_trading_day() -> str:
-    """미국 동부 기준 오늘(주말이면 직전 금요일). 휴장일은 고려하지 않음."""
+    """데이터가 있어야 할 최신 미국 거래일 (동부 17시 전이면 전날, 주말이면 직전 금요일). 휴장일은 고려하지 않음."""
     et = datetime.now(timezone(timedelta(hours=-5)))
     d = et.date()
+    if et.hour < 17:  # 미국장 마감(16시 ET) + 데이터 반영 전이면 오늘 종가는 아직 없음 → 전 거래일
+        d -= timedelta(days=1)
     while d.weekday() >= 5:
         d -= timedelta(days=1)
     return d.isoformat()
