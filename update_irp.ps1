@@ -23,7 +23,14 @@ $json = $c | ConvertTo-Json -Compress -Depth 5
 [IO.File]::WriteAllText($file, $json, (New-Object Text.UTF8Encoding $false))
 $OutputEncoding = New-Object Text.UTF8Encoding $false   # BOM 없이 보내기
 $json | & $gh secret set IRP_CONFIG --repo $repo
+# Oracle 서버(매일 계산하는 곳)에도 복사
+$key = Join-Path $HOME ".ssh\trading_ed25519"
+$json | ssh -i $key -o ConnectTimeout=15 ubuntu@100.85.41.33 "sudo tee /opt/invest-thermometer/irp.json >/dev/null && sudo chown thermo:thermo /opt/invest-thermometer/irp.json && sudo chmod 600 /opt/invest-thermometer/irp.json"
+if ($LASTEXITCODE -ne 0) { Write-Host "⚠ 서버 복사 실패 (Tailscale 연결 확인). GitHub에는 저장됨." -ForegroundColor Yellow }
 Write-Host "저장 완료: 나스닥100 $($c.holdings.ndx)주 / 반도체 $($c.holdings.sox)주 / S&P500 $($c.holdings.spx)주 / 남은 투자금 $($c.remaining)원" -ForegroundColor Green
 
 $again = Read-Host "지금 텔레그램 메시지를 다시 받을까요? (y/n)"
-if ($again -eq "y") { & $gh workflow run update.yml --repo $repo; Write-Host "요청함. 1~2분 뒤 텔레그램 확인." }
+if ($again -eq "y") {
+    ssh -i $key -o ConnectTimeout=15 ubuntu@100.85.41.33 "sudo systemd-run --quiet --uid=thermo --gid=thermo --setenv=FORCE=1 /opt/invest-thermometer/repo/deploy/oracle/run.sh"
+    Write-Host "서버에 요청함. 1~2분 뒤 텔레그램 확인."
+}

@@ -1,0 +1,10 @@
+[Unit]
+Description=투자온도계 매일 08:05 KST (월=금요일 종가 다시 보내기), 08:35 예비
+
+[Timer]
+OnCalendar=Mon..Sat *-*-* 08:05:00 Asia/Seoul
+OnCalendar=Mon..Sat *-*-* 08:35:00 Asia/Seoul
+Persistent=true
+
+[Install]
+WantedBy=timers.target

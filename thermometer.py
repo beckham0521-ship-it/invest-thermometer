@@ -562,6 +562,7 @@ def irp_section(results: list) -> tuple[str, dict]:
 
         # 우선 매수 모드: 지정한 ETF가 목표 비중이 될 때까지 월 적립액을 그 ETF에 먼저
         prio, prio_line, rest, prio_min = cfg.get("priority"), "", set(), 0.0
+        unit = {}  # 추가 매수(개월분) 계산용 1개월 금액
         if prio in keys and M > 0:
             need = max(0.0, (w[prio] * Vt - V[prio]) / (1 - w[prio]))  # 신규 자금만으로 목표 비중까지
             if need > monthly * 0.05:
@@ -569,6 +570,8 @@ def irp_section(results: list) -> tuple[str, dict]:
                 half = {k: 0.5 * w[k] * monthly for k in others}  # 목표보다 많은 ETF: 목표 몫의 절반, ★★ 날에만
                 base = {k: (monthly if k == prio else half[k]) for k in keys}
                 prio_min = monthly - sum(half.values())
+                active = [k for k in others if stars.get(k, 0) >= 2 or sig.get(k, 0) >= 2]
+                unit[prio] = monthly - sum(half[k] for k in active)  # 신호 뜬 ETF 몫을 뺀 나머지
                 gap[prio] = need
                 rest = set(others)
                 names = "·".join(KR_ETF[k][1] for k in others)
@@ -597,7 +600,7 @@ def irp_section(results: list) -> tuple[str, dict]:
             else:
                 line = f"• {KR_ETF[k][1]}: 기본 {sh}주 ({_man(base[k])}) · 신호 {mk}개월분"
             if mk >= 2:
-                amt = min(base[k] * mk, gap[k])
+                amt = min(unit.get(k, base[k]) * mk, gap[k])
                 line += f" → 하락 구간 최대 {round(amt / price[k])}주 ({_man(amt)})"
             lines.append(line)
         if pulled > monthly * 0.1 and not ended:

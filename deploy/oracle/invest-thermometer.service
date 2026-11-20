@@ -1,0 +1,15 @@
+[Unit]
+Description=투자온도계 매일 계산 + 텔레그램
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=thermo
+Group=thermo
+ExecStart=/opt/invest-thermometer/repo/deploy/oracle/run.sh
+Nice=10
+# 같은 서버의 자동매매 앱을 방해하지 않도록 메모리 제한
+MemoryHigh=350M
+MemoryMax=500M
+TimeoutStartSec=15min

@@ -2,12 +2,10 @@ name: 투자온도계 업데이트
 
 on:
   schedule:
-    # 한국시간 화~토. GitHub 예약 실행은 가끔 빠지므로 예비 실행을 두고, 이미 보낸 날은 건너뜀
-    # (정각은 전 세계 예약이 몰려 누락이 잦아 몇 분 비켜서 설정)
-    # 화~토: 전날 미국장 종가 / 월: 금요일 종가 다시 보내기 (토요일에 못 봤을 때 대비)
-    - cron: "7 23 * * 0-5"    # 08:07 KST 월~토 (기본)
-    - cron: "37 23 * * 0-5"   # 08:37 KST 월~토 (예비 1)
-    - cron: "17 0 * * 1-6"    # 09:17 KST 월~토 (예비 2)
+    # 기본 실행은 Oracle 서버(08:05 KST, deploy/oracle). 여기는 서버가 못 보냈을 때만 대신 보내는 예비.
+    # 이미 보낸 날(last_sent.txt)은 건너뜀. GitHub 예약은 몇 시간씩 늦을 수 있음.
+    - cron: "47 0 * * 1-6"    # 09:47 KST 월~토 (예비)
+    - cron: "17 3 * * 1-6"    # 12:17 KST 월~토 (예비)
   workflow_dispatch: {}   # 수동 실행 버튼
 
 permissions:
@@ -61,6 +59,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add history_full*.csv history*.csv site last_sent.txt
           git diff --cached --quiet || git commit -m "update $(date -u +%F)"
+          git pull --rebase -q || true
           git push
 
       - uses: actions/configure-pages@v5
