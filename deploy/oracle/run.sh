@@ -1,5 +1,5 @@
 #!/bin/bash
-# Oracle 서버에서 매일 실행: 계산 → 텔레그램 → 결과를 GitHub에 올림(→ Pages 자동 배포)
+# Oracle 서버에서 매일 실행: 계산 → 텔레그램 → 서버 안 git에 기록 (GitHub 원격이 있으면 거기에도 올림)
 # FORCE=1 이면 오늘 이미 보냈어도 다시 보냄 (수동 실행용)
 set -uo pipefail
 APP=/opt/invest-thermometer
@@ -7,7 +7,9 @@ cd "$APP/repo"
 export GIT_SSH_COMMAND="ssh -i $APP/deploy_key -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes"
 export CI=1   # 실패 시 재시도 간격 60초
 
-git pull --rebase -q || git rebase --abort 2>/dev/null
+HAS_REMOTE=0
+git remote get-url origin >/dev/null 2>&1 && HAS_REMOTE=1
+[ "$HAS_REMOTE" = 1 ] && { git pull --rebase -q || git rebase --abort 2>/dev/null; }
 
 today=$(TZ=Asia/Seoul date +%F)
 if [ "${FORCE:-0}" != "1" ] && [ "$(cat last_sent.txt 2>/dev/null)" = "$today" ]; then
@@ -35,9 +37,11 @@ git add history_full*.csv history*.csv site last_sent.txt 2>/dev/null
 if ! git diff --cached --quiet; then
   git -c user.name="thermometer-oracle" -c user.email="thermometer-oracle@users.noreply.github.com" \
     commit -q -m "update $today (oracle)"
-  for i in 1 2 3; do
-    git push -q && break
-    git pull --rebase -q || { git rebase --abort; break; }
-  done
+  if [ "$HAS_REMOTE" = 1 ]; then
+    for i in 1 2 3; do
+      git push -q && break
+      git pull --rebase -q || { git rebase --abort; break; }
+    done
+  fi
 fi
 exit "$status"

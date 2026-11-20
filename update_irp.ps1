@@ -22,7 +22,8 @@ $c.remaining    = Ask "남은 투자금(원, 3000만 원까지 남은 금액)" $
 $json = $c | ConvertTo-Json -Compress -Depth 5
 [IO.File]::WriteAllText($file, $json, (New-Object Text.UTF8Encoding $false))
 $OutputEncoding = New-Object Text.UTF8Encoding $false   # BOM 없이 보내기
-$json | & $gh secret set IRP_CONFIG --repo $repo
+& $gh repo view $repo *> $null
+if ($LASTEXITCODE -eq 0) { $json | & $gh secret set IRP_CONFIG --repo $repo *> $null }   # GitHub 저장소가 남아 있을 때만 (이전 기간)
 # Oracle 서버(매일 계산하는 곳)에도 복사
 $key = Join-Path $HOME ".ssh\trading_ed25519"
 $json | ssh -i $key -o ConnectTimeout=15 ubuntu@100.85.41.33 "sudo tee /opt/invest-thermometer/irp.json >/dev/null && sudo chown thermo:thermo /opt/invest-thermometer/irp.json && sudo chmod 600 /opt/invest-thermometer/irp.json"

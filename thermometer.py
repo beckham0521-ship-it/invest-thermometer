@@ -57,7 +57,7 @@ HISTORY = BASE / "history.csv"
 TEMPLATE = BASE / "template.html"
 SITE = BASE / "site"
 BACKFILL_START = "2026-01-01"
-PAGE_URL = "https://beckham0521-ship-it.github.io/invest-thermometer/"
+PAGE_URL = "https://infinite-trading.taile07384.ts.net:8768/"  # Oracle 서버 (Tailscale 켠 기기에서만)
 
 INDEXES = [
     # slow: 적립 조건 Slow 기준 / wl, wl2: RSI 주간 저점 1·2단계 / wh_stop, wh_trim: RSI 주간 고점(추가 매수 멈춤 / 강한 과열) — 매도는 리밸런싱 때만
