@@ -152,7 +152,8 @@ function render() {
     ['총 평가액', man(s.total_value)],
     ['평가 손익', `<span class="${cls(s.total_pl)}">${man(s.total_pl)}</span>`],
     ['순투입 (매수−매도)', man(s.net_invested)],
-    ['남은 투자금', `${man(s.remaining)} <span class="muted">/ ${man(s.plan_total)}</span>`],
+    ['남은 투자금', `${man(s.remaining)} <span class="muted">/ ${man(s.plan_total)}</span>`
+      + `<div class="muted" style="font-size:12px;font-weight:600;margin-top:2px">= ${man(s.monthly)} × ${s.remaining_months}개월 + α ${man(s.remaining_alpha)}</div>`],
   ].map(([k, v]) => `<div class="tot"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
   $('#pos').innerHTML = ['ndx', 'sox', 'spx'].map(k => {
     const p = s.positions[k];

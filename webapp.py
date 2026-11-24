@@ -19,12 +19,14 @@ SITE = BASE / "site"
 app = Flask(__name__, static_folder=None)
 
 
-def _plan_total() -> float:
+def _plan() -> tuple[float, float]:
+    """(계획 총액, 월 적립액) — irp.json 에서, 없으면 3,000만 · 75만."""
     f = T.data_dir() / "irp.json"
     try:
-        return float(json.loads(f.read_text(encoding="utf-8-sig")).get("plan_total", 30_000_000))
+        j = json.loads(f.read_text(encoding="utf-8-sig"))
+        return float(j.get("plan_total", 30_000_000)), float(j.get("monthly", 750_000))
     except Exception:  # noqa: BLE001
-        return 30_000_000.0
+        return 30_000_000.0, 750_000.0
 
 
 def _guard():
@@ -65,7 +67,7 @@ def trades_page():
 def api_list():
     prices, pdate = T.load_prices()
     rows = T.load()
-    return jsonify(trades=rows, summary=T.summary(rows, prices, _plan_total()), price_date=pdate,
+    return jsonify(trades=rows, summary=T.summary(rows, prices, *_plan()), price_date=pdate,
                    etfs={k: v[1] for k, v in T.ETFS.items()}, kinds=T.KINDS)
 
 

@@ -593,7 +593,8 @@ def irp_section(results: list) -> tuple[str, dict]:
                              f"· {names}는 ★★ 날에만 목표의 절반, 나머지는 {KR_ETF[prio][1]}")
 
         lines = [f"💼 <b>내 IRP</b> ({pdate} 국내 종가{' · 매매 기록 기준' if from_log else ''})",
-                 f"평가 {_man(Vt)}" + ("" if ended else f" · 남은 투자금 {_man(R)} · 남은 {M}개월"),
+                 f"평가 {_man(Vt)}" + ("" if ended else f" · 적립 기간 {M}개월 남음"),
+                 *([] if ended else [f"남은 투자금 {_man(R)} = {_man(monthly)} × {int(R // monthly)}개월 + α {_man(R - (R // monthly) * monthly)}"]),
                  "비중 " + " / ".join(f"{100 * V[k] / Vt:.0f}" for k in keys) + "% → 목표 "
                  + " / ".join(f"{100 * w[k]:.0f}" for k in keys) + "%",
                  ("✅ 적립 기간 종료 → 새 매수 없음, 매년 1월 리밸런싱만 (주식 전체를 목표 비중으로)" if ended

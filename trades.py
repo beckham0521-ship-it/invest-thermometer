@@ -126,7 +126,14 @@ def _check_no_oversell(rows: list[dict]) -> None:
             raise ValueError(f"{r['date']} {ETFS[r['etf']][0]}: 보유 수량보다 많이 매도하게 돼요")
 
 
-def summary(rows: list[dict] | None = None, prices: dict | None = None, plan_total: float = 30_000_000) -> dict:
+def split_months(remaining: float, monthly: float = 750_000) -> tuple[int, float]:
+    """남은 투자금 = 월 적립액 × 개월(몫) + α(나머지)."""
+    n = int(remaining // monthly) if monthly > 0 else 0
+    return n, remaining - n * monthly
+
+
+def summary(rows: list[dict] | None = None, prices: dict | None = None, plan_total: float = 30_000_000,
+            monthly: float = 750_000) -> dict:
     rows = load() if rows is None else rows
     prices = prices or {}
     pos = {k: {"qty": 0, "cost": 0.0, "realized": 0.0, "bought": 0.0, "sold": 0.0} for k in ETFS}
@@ -158,6 +165,8 @@ def summary(rows: list[dict] | None = None, prices: dict | None = None, plan_tot
             "total_pl": total_value - cost if total_value else None,
             "realized": sum(p["realized"] for p in pos.values()),
             "net_invested": net, "plan_total": plan_total, "remaining": max(0.0, plan_total - net),
+            "monthly": monthly, "remaining_months": split_months(max(0.0, plan_total - net), monthly)[0],
+            "remaining_alpha": split_months(max(0.0, plan_total - net), monthly)[1],
             "count": len(rows), "has_base": any(r["kind"] == "기초 보유" for r in rows)}
 
 
