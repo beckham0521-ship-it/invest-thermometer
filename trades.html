@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>투자온도계 · 매매 기록</title>
+<style>
+  :root {
+    --page: #f6f6f3; --surface: #fcfcfb; --line: #e4e3de; --grid: #ecebe6;
+    --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #8a8983;
+    --buy: #c0392b; --sell: #1f5fbf; --good: #0a8a0a; --accent: #7b4fd6;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 2px 8px rgba(0,0,0,.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --page: #0d0d0d; --surface: #1a1a19; --line: #2c2c2a; --grid: #262624;
+      --ink: #f0efec; --ink-2: #c3c2b7; --ink-3: #8d8c85; --buy: #ff7a6b; --sell: #6ea8ff; --good: #4cc94c; --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink);
+    font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+    font-variant-numeric: tabular-nums; line-height: 1.45; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 16px 56px; }
+  header { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  h1 { font-size: 22px; margin: 0; }
+  h2 { font-size: 15px; margin: 0 0 12px; }
+  .muted { color: var(--ink-3); font-size: 12px; }
+  .tabs { display: flex; gap: 6px; margin: 0 0 16px; }
+  .tabs a { flex: 0 0 auto; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2);
+    text-decoration: none; font-size: 14px; font-weight: 600; background: var(--surface); }
+  .tabs a.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 18px; margin-bottom: 16px; }
+  .totals { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin-bottom: 12px; }
+  .tot { border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .tot .k { font-size: 12px; color: var(--ink-2); } .tot .v { font-size: 19px; font-weight: 800; margin-top: 4px; }
+  .pos { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
+  .p { border: 1px solid var(--line); border-radius: 10px; padding: 12px; font-size: 13px; }
+  .p .nm { font-weight: 800; font-size: 14px; margin-bottom: 6px; }
+  .p .row { display: flex; justify-content: space-between; padding: 2px 0; }
+  .p .row span:first-child { color: var(--ink-2); }
+  .up { color: var(--buy); } .down { color: var(--sell); }
+  form { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; align-items: end; }
+  label { font-size: 12px; color: var(--ink-2); display: block; }
+  input, select { width: 100%; margin-top: 4px; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--page); color: var(--ink); font: inherit; font-size: 15px; }
+  .seg { display: flex; gap: 6px; margin-top: 4px; }
+  .seg button { flex: 1; padding: 9px 0; border-radius: 8px; border: 1px solid var(--line); background: var(--page); color: var(--ink-2); font: inherit; font-weight: 700; cursor: pointer; }
+  .seg button.on.buy { background: var(--buy); color: #fff; border-color: var(--buy); }
+  .seg button.on.sell { background: var(--sell); color: #fff; border-color: var(--sell); }
+  .span2 { grid-column: span 2; } .span4 { grid-column: 1 / -1; }
+  .actions { display: flex; gap: 8px; align-items: center; }
+  .btn { padding: 10px 18px; border-radius: 8px; border: 0; background: var(--ink); color: var(--surface); font: inherit; font-weight: 700; cursor: pointer; }
+  .btn.ghost { background: transparent; color: var(--ink-2); border: 1px solid var(--line); }
+  .amt { font-size: 13px; color: var(--ink-2); }
+  .msg { font-size: 13px; margin-left: 4px; } .msg.err { color: var(--buy); } .msg.ok { color: var(--good); }
+  .banner { padding: 10px 14px; border-radius: 10px; font-size: 13px; background: rgba(123,79,214,.10); margin-bottom: 12px; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 760px; }
+  th { text-align: right; font-weight: 600; color: var(--ink-2); font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { text-align: right; padding: 7px 8px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  th:nth-child(-n+3), td:nth-child(-n+3) { text-align: left; }
+  td.memo { text-align: left; white-space: normal; color: var(--ink-2); max-width: 220px; }
+  .tag { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); }
+  .side-buy { color: var(--buy); font-weight: 700; } .side-sell { color: var(--sell); font-weight: 700; }
+  .link { background: none; border: 0; color: var(--ink-3); cursor: pointer; font: inherit; font-size: 12px; padding: 2px 4px; }
+  .link:hover { color: var(--ink); }
+  @media (max-width: 760px) {
+    .totals { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .pos { grid-template-columns: minmax(0,1fr); }
+    form { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .tabs a { flex: 1 1 0; text-align: center; padding: 8px 4px; font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div><h1>📒 매매 기록</h1><div class="muted" id="sub"></div></div>
+    <div class="muted">IRP · 국내 상장 ETF</div>
+  </header>
+  <nav class="tabs"><a href="/">QQQ</a><a href="/sox.html">SOXX</a><a href="/spx.html">VOO</a><a href="/trades" class="on">📒 기록</a></nav>
+
+  <section class="card">
+    <h2>내 계좌</h2>
+    <div id="banner"></div>
+    <div class="totals" id="totals"></div>
+    <div class="pos" id="pos"></div>
+  </section>
+
+  <section class="card">
+    <h2 id="formtitle">매매 입력</h2>
+    <form id="f" autocomplete="off">
+      <div><label>날짜<input type="date" name="date" required></label></div>
+      <div><label>종목<select name="etf" id="etf"></select></label></div>
+      <div><label>매수 / 매도</label>
+        <div class="seg"><button type="button" class="buy on" data-side="buy">매수</button><button type="button" class="sell" data-side="sell">매도</button></div>
+      </div>
+      <div><label>구분<select name="kind" id="kind"></select></label></div>
+      <div><label>수량 (주)<input type="number" name="qty" min="1" step="1" inputmode="numeric" required></label></div>
+      <div><label>단가 (원)<input type="number" name="price" min="1" step="any" inputmode="decimal" required></label></div>
+      <div class="span2"><label>메모<input type="text" name="memo" maxlength="200" placeholder="예: 4개월분 피라미딩 1/2"></label></div>
+      <div class="span4 actions">
+        <button class="btn" type="submit" id="save">저장</button>
+        <button class="btn ghost" type="button" id="cancel" hidden>취소</button>
+        <span class="amt" id="amt"></span><span class="msg" id="msg"></span>
+      </div>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>기록 <span class="muted" id="cnt"></span></h2>
+    <div class="table-wrap"><table id="tbl"></table></div>
+  </section>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const won = v => v == null || isNaN(v) ? '–' : Math.round(v).toLocaleString('ko-KR') + '원';
+const man = v => v == null || isNaN(v) ? '–' : (v / 1e4).toLocaleString('ko-KR', {maximumFractionDigits: 1}) + '만';
+const pct = v => v == null || isNaN(v) ? '–' : (v > 0 ? '+' : '') + v.toFixed(1) + '%';
+const cls = v => v > 0 ? 'up' : v < 0 ? 'down' : '';
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const SHORT = { ndx: '나스닥100', sox: '반도체', spx: 'S&P500' };
+let STATE = null, side = 'buy', editId = null;
+
+async function api(method, url, body) {
+  const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'X-Thermo': '1' }, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.ok === false) throw new Error(j.error || ('오류 ' + r.status));
+  return j;
+}
+
+function setSide(s) {
+  side = s;
+  document.querySelectorAll('.seg button').forEach(b => b.classList.toggle('on', b.dataset.side === s));
+  calcAmt();
+}
+
+function calcAmt() {
+  const q = +$('[name=qty]').value, p = +$('[name=price]').value;
+  $('#amt').textContent = q && p ? `금액 ${won(q * p)}` : '';
+}
+
+function render() {
+  const s = STATE.summary;
+  $('#sub').textContent = STATE.price_date ? `현재가: ${STATE.price_date} 국내 종가 (매일 아침 갱신)` : '현재가: 아직 없음 (내일 아침 갱신)';
+  $('#banner').innerHTML = s.has_base ? '' :
+    '<div class="banner">처음이면 지금 갖고 있는 수량을 <b>구분 "기초 보유"</b>로 종목마다 한 번씩 입력하세요. 단가는 증권사 앱의 <b>평균 매입가</b>를 넣으면 손익이 정확해요.</div>';
+  $('#totals').innerHTML = [
+    ['총 평가액', man(s.total_value)],
+    ['평가 손익', `<span class="${cls(s.total_pl)}">${man(s.total_pl)}</span>`],
+    ['순투입 (매수−매도)', man(s.net_invested)],
+    ['남은 투자금', `${man(s.remaining)} <span class="muted">/ ${man(s.plan_total)}</span>`],
+  ].map(([k, v]) => `<div class="tot"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+  $('#pos').innerHTML = ['ndx', 'sox', 'spx'].map(k => {
+    const p = s.positions[k];
+    return `<div class="p"><div class="nm">${esc(STATE.etfs[k])}</div>
+      <div class="row"><span>보유</span><b>${p.qty.toLocaleString()}주</b></div>
+      <div class="row"><span>평균 단가</span><span>${won(p.avg)}</span></div>
+      <div class="row"><span>현재가</span><span>${won(p.price)}</span></div>
+      <div class="row"><span>평가액</span><span>${won(p.value)}</span></div>
+      <div class="row"><span>손익</span><span class="${cls(p.pl)}">${won(p.pl)} (${pct(p.pl_pct)})</span></div>
+      <div class="row"><span>비중</span><span>${p.weight == null ? '–' : p.weight.toFixed(1) + '%'}</span></div></div>`;
+  }).join('');
+  $('#cnt').textContent = `${STATE.trades.length}건`;
+  const head = '<tr><th>날짜</th><th>종목</th><th>구분</th><th>매수/매도</th><th>수량</th><th>단가</th><th>금액</th><th>메모</th><th></th></tr>';
+  const body = [...STATE.trades].reverse().map(t => `<tr>
+    <td>${t.date}</td><td>${SHORT[t.etf]}</td><td><span class="tag">${esc(t.kind)}</span></td>
+    <td class="side-${t.side}">${t.side === 'buy' ? '매수' : '매도'}</td>
+    <td>${t.qty.toLocaleString()}주</td><td>${won(t.price)}</td><td>${won(t.qty * t.price)}</td>
+    <td class="memo">${esc(t.memo)}</td>
+    <td><button class="link" data-edit="${t.id}">수정</button><button class="link" data-del="${t.id}">삭제</button></td></tr>`).join('');
+  $('#tbl').innerHTML = head + (body || '<tr><td colspan="9" class="muted" style="text-align:center;padding:20px">아직 기록이 없어요</td></tr>');
+}
+
+async function load() {
+  STATE = await api('GET', '/api/trades');
+  if (!$('#etf').options.length) {
+    $('#etf').innerHTML = Object.entries(STATE.etfs).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join('');
+    $('#kind').innerHTML = STATE.kinds.map(k => `<option>${esc(k)}</option>`).join('');
+    $('#kind').value = STATE.summary.has_base ? '정기' : '기초 보유';
+  }
+  render();
+}
+
+function resetForm() {
+  editId = null;
+  $('#f').reset();
+  $('[name=date]').value = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+  $('#kind').value = STATE && STATE.summary.has_base ? '정기' : '기초 보유';
+  setSide('buy');
+  $('#formtitle').textContent = '매매 입력';
+  $('#save').textContent = '저장';
+  $('#cancel').hidden = true;
+}
+
+$('#f').addEventListener('submit', async e => {
+  e.preventDefault();
+  const fd = Object.fromEntries(new FormData(e.target));
+  fd.side = side;
+  $('#msg').className = 'msg'; $('#msg').textContent = '저장 중…';
+  try {
+    if (editId) await api('PUT', `/api/trades/${editId}`, fd); else await api('POST', '/api/trades', fd);
+    $('#msg').className = 'msg ok'; $('#msg').textContent = editId ? '수정했어요' : '저장했어요';
+    resetForm(); await load();
+  } catch (err) { $('#msg').className = 'msg err'; $('#msg').textContent = err.message; }
+});
+document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => setSide(b.dataset.side)));
+['qty', 'price'].forEach(n => $(`[name=${n}]`).addEventListener('input', calcAmt));
+$('#cancel').addEventListener('click', () => { resetForm(); $('#msg').textContent = ''; });
+$('#tbl').addEventListener('click', async e => {
+  const id = +(e.target.dataset.edit || e.target.dataset.del || 0);
+  if (!id) return;
+  const t = STATE.trades.find(x => x.id === id);
+  if (e.target.dataset.del) {
+    if (!confirm(`${t.date} ${SHORT[t.etf]} ${t.side === 'buy' ? '매수' : '매도'} ${t.qty}주 기록을 삭제할까요?`)) return;
+    try { await api('DELETE', `/api/trades/${id}`); await load(); } catch (err) { alert(err.message); }
+    return;
+  }
+  editId = id;
+  for (const k of ['date', 'etf', 'kind', 'qty', 'price', 'memo']) $(`[name=${k}]`).value = t[k];
+  setSide(t.side);
+  $('#formtitle').textContent = '기록 수정';
+  $('#save').textContent = '수정 저장';
+  $('#cancel').hidden = false;
+  $('#f').scrollIntoView({ behavior: 'smooth' });
+});
+
+load().then(resetForm).catch(err => { document.querySelector('.wrap').insertAdjacentHTML('afterbegin', `<div class="banner">불러오기 실패: ${esc(err.message)}</div>`); });
+</script>
+</body>
+</html>

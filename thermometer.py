@@ -349,6 +349,7 @@ def render_page(ix: dict, hist: pd.DataFrame, monthly: pd.DataFrame, full: pd.Da
 
     tabs = "".join(
         f'<a href="{o["page"]}" class="{"on" if o["key"] == ix["key"] else ""}">{o["tab"]}</a>' for o in INDEXES)
+    tabs += '<a href="/trades">📒 기록</a>'  # 서버 웹(webapp.py)의 매매 기록 페이지
     cfg = {k: ix[k] for k in ("slow", "fg", "triple", "wl", "wl2", "wh_stop", "wh_trim", "low1", "low2", "note")}
     cfg["warn"] = WARNINGS
     cfg["data_date"] = str(full["date"].max())
@@ -538,6 +539,17 @@ def irp_section(results: list) -> tuple[str, dict]:
         price, pdate = {}, ""
         for k in keys:
             price[k], pdate = _kr_price(KR_ETF[k][0])
+        import trades as TR  # 매매 기록 (있으면 보유 수량·남은 투자금을 여기서 계산)
+        try:
+            TR.save_prices(price, pdate)
+        except Exception:  # noqa: BLE001
+            pass
+        rows = TR.load()
+        from_log = bool(rows)
+        if from_log:
+            sm = TR.summary(rows, {}, float(cfg.get("plan_total", 30_000_000)))
+            hold = {k: sm["positions"][k]["qty"] for k in TR.ETFS}
+            R = sm["remaining"]
         V = {k: hold.get(k, 0) * price[k] for k in keys}
         Vt = sum(V.values())
 
@@ -580,7 +592,7 @@ def irp_section(results: list) -> tuple[str, dict]:
                 prio_line = (f"{KR_ETF[prio][1]} 우선: 비중 {100 * V[prio] / Vt:.0f}% → {100 * w[prio]:.0f}%까지 {_man(need)} "
                              f"· {names}는 ★★ 날에만 목표의 절반, 나머지는 {KR_ETF[prio][1]}")
 
-        lines = [f"💼 <b>내 IRP</b> ({pdate} 국내 종가)",
+        lines = [f"💼 <b>내 IRP</b> ({pdate} 국내 종가{' · 매매 기록 기준' if from_log else ''})",
                  f"평가 {_man(Vt)}" + ("" if ended else f" · 남은 투자금 {_man(R)} · 남은 {M}개월"),
                  "비중 " + " / ".join(f"{100 * V[k] / Vt:.0f}" for k in keys) + "% → 목표 "
                  + " / ".join(f"{100 * w[k]:.0f}" for k in keys) + "%",
@@ -630,7 +642,8 @@ def irp_section(results: list) -> tuple[str, dict]:
         limit = float(cfg.get("irp_total", 50000000)) * 0.7
         if Vt > limit * 0.95:
             lines.append(f"⚠ 위험자산 {_man(Vt)} / 한도 {_man(limit)} (70%)에 근접")
-        lines.append("<i>매수 후 update_irp.ps1 로 보유 수량·남은 투자금 업데이트</i>")
+        lines.append("<i>매수·매도 후 대시보드 📒 기록에 입력하면 다음 메시지에 반영</i>" if from_log
+                     else "<i>매수 후 대시보드 📒 기록에 '기초 보유'부터 입력하면 수량이 자동 계산돼요</i>")
         ctx = {"done": done, "rest": rest, "prio_name": KR_ETF[prio][1] if prio in KR_ETF else "", "rebal": rebal,
                "ended": ended}
         return "\n".join(lines), ctx

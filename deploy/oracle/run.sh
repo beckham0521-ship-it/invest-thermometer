@@ -6,6 +6,7 @@ APP=/opt/invest-thermometer
 cd "$APP/repo"
 export GIT_SSH_COMMAND="ssh -i $APP/deploy_key -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes"
 export CI=1   # 실패 시 재시도 간격 60초
+export THERMO_DATA="$APP"   # 매매 기록(trades.csv)·국내 가격 파일
 
 HAS_REMOTE=0
 git remote get-url origin >/dev/null 2>&1 && HAS_REMOTE=1

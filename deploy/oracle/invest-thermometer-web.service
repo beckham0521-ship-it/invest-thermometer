@@ -1,0 +1,18 @@
+[Unit]
+Description=투자온도계 웹 (대시보드 + 매매 기록), 127.0.0.1:8768 → tailscale serve
+After=network-online.target
+
+[Service]
+User=thermo
+Group=thermo
+WorkingDirectory=/opt/invest-thermometer/repo
+Environment=THERMO_DATA=/opt/invest-thermometer
+Environment=THERMO_PORT=8768
+ExecStart=/opt/invest-thermometer/venv/bin/python webapp.py
+Restart=on-failure
+RestartSec=5
+MemoryHigh=100M
+MemoryMax=160M
+
+[Install]
+WantedBy=multi-user.target
