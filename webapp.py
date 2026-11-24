@@ -19,14 +19,17 @@ SITE = BASE / "site"
 app = Flask(__name__, static_folder=None)
 
 
+def _cfg() -> dict:
+    try:
+        return json.loads((T.data_dir() / "irp.json").read_text(encoding="utf-8-sig"))
+    except Exception:  # noqa: BLE001
+        return {}
+
+
 def _plan() -> tuple[float, float]:
     """(계획 총액, 월 적립액) — irp.json 에서, 없으면 3,000만 · 75만."""
-    f = T.data_dir() / "irp.json"
-    try:
-        j = json.loads(f.read_text(encoding="utf-8-sig"))
-        return float(j.get("plan_total", 30_000_000)), float(j.get("monthly", 750_000))
-    except Exception:  # noqa: BLE001
-        return 30_000_000.0, 750_000.0
+    c = _cfg()
+    return float(c.get("plan_total", 30_000_000)), float(c.get("monthly", 750_000))
 
 
 def _guard():
@@ -67,7 +70,12 @@ def trades_page():
 def api_list():
     prices, pdate = T.load_prices()
     rows = T.load()
-    return jsonify(trades=rows, summary=T.summary(rows, prices, *_plan()), price_date=pdate,
+    sm = T.summary(rows, prices, *_plan())
+    c = _cfg()
+    from datetime import datetime, timedelta, timezone
+    sm["schedule"] = T.schedule(sm["remaining"], sm["monthly"], c.get("start", "2026-12"), c.get("end", "2028-06"),
+                                datetime.now(timezone(timedelta(hours=9))).date())
+    return jsonify(trades=rows, summary=sm, price_date=pdate,
                    etfs={k: v[1] for k, v in T.ETFS.items()}, kinds=T.KINDS)
 
 

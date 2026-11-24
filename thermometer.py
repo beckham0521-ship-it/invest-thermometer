@@ -402,7 +402,8 @@ def todo_lines(ix: dict, r: pd.Series, n: int, ctx: dict) -> list[str]:
         out.append(f"추가 매수: 이번 하락 구간에 {months}개월분까지 채우기 (이미 당겨 산 만큼 빼고) → {how}")
     # 3) 정기 적립
     if ctx.get("done"):
-        out.append("정기 적립: 이번 달 완료 → 다음 달 ★★ 날 기다리기")
+        out.append(f"정기 적립: {ctx.get('through_text', '이번 달')}분까지 완료 → "
+                   + (f"{ctx['next_text']}부터 다시 (★★ 날)" if ctx.get("next_text") else "다음 달 ★★ 날 기다리기"))
     elif ix["key"] in ctx.get("rest", set()):
         p = ctx.get("prio_name", "")
         out.append(f"정기 적립: <b>오늘 ★★ → 이번 달 몫(목표의 절반) 매수</b> ({p} 우선 기간, 이미 샀으면 건너뛰기)" if n >= 2
@@ -559,14 +560,10 @@ def irp_section(results: list) -> tuple[str, dict]:
             return y * 12 + m
         now = _today_kst()
         cur, st, en = now.year * 12 + now.month, ym(cfg["start"]), ym(cfg["end"])
-        if cur < st:
-            done, M = True, en - st + 1
-        else:
-            m_incl = max(0, en - cur + 1)
-            done = R <= monthly * (m_incl - 1) + monthly * 0.1
-            M = m_incl - 1 if done else m_incl
-        pulled = max(0.0, monthly * M - R)
-        ended = cur > en  # 적립 기간(end) 종료 → 새 매수 없음, 1월 리밸런싱만
+        sch = TR.schedule(R, monthly, cfg["start"], cfg["end"], now)  # 몇 월분까지 적립 완료(앞당김 포함)
+        done, ended = sch["done"], sch["ended"]  # ended: 적립 기간 종료 → 새 매수 없음, 1월 리밸런싱만
+        M = max(1, int(R // monthly)) if R >= monthly else (1 if R > 0 else 0)  # 남은 돈의 개월 수
+        pulled = 0.0
 
         # 계획 끝에 목표 비중이 되도록 남은 투자금을 나누기 (매도 없음)
         gap = {k: max(0.0, w[k] * (Vt + R) - V[k]) for k in keys}
@@ -593,12 +590,16 @@ def irp_section(results: list) -> tuple[str, dict]:
                              f"· {names}는 ★★ 날에만 목표의 절반, 나머지는 {KR_ETF[prio][1]}")
 
         lines = [f"💼 <b>내 IRP</b> ({pdate} 국내 종가{' · 매매 기록 기준' if from_log else ''})",
-                 f"평가 {_man(Vt)}" + ("" if ended else f" · 적립 기간 {M}개월 남음"),
-                 *([] if ended else [f"남은 투자금 {_man(R)} = {_man(monthly)} × {int(R // monthly)}개월 + α {_man(R - (R // monthly) * monthly)}"]),
+                 f"평가 {_man(Vt)}" + ("" if ended else f" · 적립 기간 {sch['start_text']} ~ {sch['end_text']}"),
+                 *([] if ended else [
+                     ("정기 적립: " + (f"<b>{sch['through_text']}분까지 완료</b>" if sch["paid"] else "아직 적립 전")
+                      + (f" ({sch['ahead']}개월 앞당김)" if sch["ahead"] else "")
+                      + (f" → 다음 정기 매수 {sch['next_text']}" if sch["next_text"] else "")),
+                     f"남은 투자금 {_man(R)} = {_man(monthly)} × {int(R // monthly)}개월 + α {_man(R - (R // monthly) * monthly)}"]),
                  "비중 " + " / ".join(f"{100 * V[k] / Vt:.0f}" for k in keys) + "% → 목표 "
                  + " / ".join(f"{100 * w[k]:.0f}" for k in keys) + "%",
                  ("✅ 적립 기간 종료 → 새 매수 없음, 매년 1월 리밸런싱만 (주식 전체를 목표 비중으로)" if ended
-                  else "이번 달 정기 매수: 완료 ✅ (아래는 다음 달 기준)" if done else "이번 달 정기 매수: <b>아직</b>")]
+                  else "아래 기본 수량은 다음 정기 매수 기준" if done else "이번 달 정기 매수: <b>아직</b>")]
         if prio_line and not ended:
             lines.append(prio_line)
         for k in ([] if ended else keys):
@@ -646,7 +647,7 @@ def irp_section(results: list) -> tuple[str, dict]:
         lines.append("<i>매수·매도 후 대시보드 📒 기록에 입력하면 다음 메시지에 반영</i>" if from_log
                      else "<i>매수 후 대시보드 📒 기록에 '기초 보유'부터 입력하면 수량이 자동 계산돼요</i>")
         ctx = {"done": done, "rest": rest, "prio_name": KR_ETF[prio][1] if prio in KR_ETF else "", "rebal": rebal,
-               "ended": ended}
+               "ended": ended, "through_text": sch["through_text"], "next_text": sch["next_text"]}
         return "\n".join(lines), ctx
     except Exception as e:  # noqa: BLE001
         return f"💼 내 IRP: 계산 실패 ({_html.escape(type(e).__name__)})", {}

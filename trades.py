@@ -126,6 +126,31 @@ def _check_no_oversell(rows: list[dict]) -> None:
             raise ValueError(f"{r['date']} {ETFS[r['etf']][0]}: 보유 수량보다 많이 매도하게 돼요")
 
 
+def _ym(x: str) -> int:
+    y, m = map(int, x.split("-"))
+    return y * 12 + m
+
+
+def ym_text(i: int) -> str:
+    y, m = divmod(i - 1, 12)
+    return f"{y}년 {m + 1}월"
+
+
+def schedule(remaining: float, monthly: float, start: str, end: str, today) -> dict:
+    """남은 투자금으로 '몇 월분까지 적립 완료'를 계산 (앞당겨 산 것 포함).
+    전체 개월(start~end) − 남은 돈의 개월(몫) = 이미 채운 개월."""
+    st, en = _ym(start), _ym(end)
+    cur = today.year * 12 + today.month
+    total = en - st + 1
+    paid = max(0, total - int(remaining // monthly)) if monthly > 0 else total
+    through = st + paid - 1                      # 이 달분까지 완료 (st-1 이면 아직 없음)
+    ahead = through - max(cur, st - 1)           # 오늘 기준 몇 개월 앞서 샀는지
+    return {"paid": paid, "through": through, "through_text": ym_text(through) if paid else "",
+            "next": through + 1, "next_text": ym_text(through + 1) if through + 1 <= en else "",
+            "ahead": max(0, ahead), "done": through >= cur, "ended": cur > en,
+            "start_text": ym_text(st), "end_text": ym_text(en)}
+
+
 def split_months(remaining: float, monthly: float = 750_000) -> tuple[int, float]:
     """남은 투자금 = 월 적립액 × 개월(몫) + α(나머지)."""
     n = int(remaining // monthly) if monthly > 0 else 0
